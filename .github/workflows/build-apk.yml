@@ -29,11 +29,15 @@ jobs:
       - name: Build release APK
         # v1.0.1: arm64-only — the universal APK bundled armeabi-v7a +
         # x86_64 native libs (~110MB) no arm64 phone ever uses.
-        run: cd android && flutter build apk --release --target-platform android-arm64
+        # NOTE: --target-platform alone does NOT drop the other ABIs:
+        # the ffmpeg/python .so files come from AAR dependencies and AGP
+        # packages all of them. --split-per-abi is what actually filters
+        # the APK down to one ABI.
+        run: cd android && flutter build apk --release --split-per-abi --target-platform android-arm64
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: snapdl-release-apk
-          path: android/build/app/outputs/flutter-apk/app-release.apk
+          path: android/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
