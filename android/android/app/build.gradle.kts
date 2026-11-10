@@ -34,6 +34,15 @@ android {
         versionName = flutter.versionName
     }
 
+    // The download engine ships its runtime as .so files that must be
+    // extracted at install (legacy packaging) — the AGP 8 replacement for
+    // android:extractNativeLibs="true" in the manifest.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
