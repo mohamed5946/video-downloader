@@ -14,6 +14,7 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
@@ -180,7 +181,7 @@ class MainActivity : FlutterActivity() {
     // v1.0.4: the actual adblock calls, invoked through the guarded
     // wrapper above — a failure here answers Dart with an error.
     private fun handleAdblockCall(
-        call: MethodChannel.MethodCall,
+        call: MethodCall,
         result: MethodChannel.Result,
     ) {
         when (call.method) {
