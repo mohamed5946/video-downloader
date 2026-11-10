@@ -27,7 +27,9 @@ jobs:
           channel: stable
 
       - name: Build release APK
-        run: cd android && flutter build apk --release
+        # v1.0.1: arm64-only — the universal APK bundled armeabi-v7a +
+        # x86_64 native libs (~110MB) no arm64 phone ever uses.
+        run: cd android && flutter build apk --release --target-platform android-arm64
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

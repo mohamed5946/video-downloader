@@ -15,6 +15,11 @@
         android:label="SnapDL"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- v1.0.1: Impeller (Flutter's new graphics engine) crashes at
+             launch on some devices — fall back to the proven Skia renderer. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

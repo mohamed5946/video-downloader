@@ -180,20 +180,38 @@ class MainActivity : FlutterActivity() {
 
     private fun initEngine(result: MethodChannel.Result) {
         if (engineReady) {
-            result.success(YoutubeDL.version(applicationContext) ?: "")
+            // v1.0.1: even the cached path must never throw off the main thread.
+            try {
+                result.success(YoutubeDL.version(applicationContext) ?: "")
+            } catch (t: Throwable) {
+                result.error("ENGINE_INIT", t.message, null)
+            }
             return
         }
         Thread {
             try {
                 YoutubeDL.init(applicationContext)
                 FFmpeg.init(applicationContext)
-                ffmpegDir = findFfmpegDir()
+                // v1.0.1: a failure locating ffmpeg must not fail the engine.
+                ffmpegDir = try {
+                    findFfmpegDir()
+                } catch (t: Throwable) {
+                    null
+                }
                 engineReady = true
-                val version = YoutubeDL.version(applicationContext) ?: ""
+                val version = try {
+                    YoutubeDL.version(applicationContext) ?: ""
+                } catch (t: Throwable) {
+                    ""
+                }
                 mainHandler.post { result.success(version) }
-            } catch (e: Exception) {
+            } catch (t: Throwable) {
+                // v1.0.1: catch Throwable (incl. UnsatisfiedLinkError and
+                // other Errors) — an uncaught Error on this worker thread
+                // kills the whole app process ("has stopped" on launch).
+                // Always answer the Dart side so it never hangs.
                 mainHandler.post {
-                    result.error("ENGINE_INIT", e.message, null)
+                    result.error("ENGINE_INIT", t.message, null)
                 }
             }
         }.start()
@@ -201,24 +219,29 @@ class MainActivity : FlutterActivity() {
 
     /** Locate the extracted ffmpeg executable so yt-dlp can merge / convert. */
     private fun findFfmpegDir(): String? {
-        val roots = listOf(
-            File(noBackupFilesDir, "youtubedl-android/packages/ffmpeg"),
-            File(filesDir, "youtubedl-android/packages/ffmpeg"),
-            File(applicationContext.noBackupFilesDir, "youtubedl-android")
-        )
-        for (root in roots) {
-            if (!root.exists()) continue
-            val found = root.walkTopDown()
-                .filter { it.isFile }
-                .firstOrNull {
-                    it.name == "ffmpeg" || it.name.startsWith("libffmpeg")
+        // v1.0.1: never let a filesystem walk throw into the engine init.
+        return try {
+            val roots = listOf(
+                File(noBackupFilesDir, "youtubedl-android/packages/ffmpeg"),
+                File(filesDir, "youtubedl-android/packages/ffmpeg"),
+                File(applicationContext.noBackupFilesDir, "youtubedl-android")
+            )
+            for (root in roots) {
+                if (!root.exists()) continue
+                val found = root.walkTopDown()
+                    .filter { it.isFile }
+                    .firstOrNull {
+                        it.name == "ffmpeg" || it.name.startsWith("libffmpeg")
+                    }
+                if (found != null) {
+                    found.setExecutable(true)
+                    return found.parentFile?.absolutePath
                 }
-            if (found != null) {
-                found.setExecutable(true)
-                return found.parentFile?.absolutePath
             }
+            null
+        } catch (t: Throwable) {
+            null
         }
-        return null
     }
 
     private fun downloadDir(): File {

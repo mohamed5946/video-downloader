@@ -9,7 +9,6 @@ import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/watch_screen.dart';
 import 'services/download_controller.dart';
-import 'services/engine_service.dart';
 import 'services/history_service.dart';
 import 'services/log_service.dart';
 import 'services/settings_service.dart';
@@ -45,22 +44,9 @@ class _SnapDLAppState extends State<SnapDLApp> {
   void initState() {
     super.initState();
     _controller = DownloadController();
-    _initEngine();
     _maybeSeedPreview();
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _maybeAutoCheck(context));
-  }
-
-  Future<void> _initEngine() async {
-    // No native engine in widget tests or on web (previews only).
-    if (kIsWeb || SnapDLApp.testPreview != null) return;
-    final ok = await EngineService.instance.init();
-    if (!ok) {
-      // Engine health is reported ONLY inside سجل التشخيص — never as a
-      // badge or status line on the main screens (2026-11-10 revision).
-      LogService.instance.error(LogCategory.engine,
-          'Download service failed to start — downloads will not work on this build');
-    }
   }
 
   /// Web-only: ?preview=home|history|about|settings|watch seeds realistic

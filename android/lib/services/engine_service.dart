@@ -45,7 +45,10 @@ class EngineService {
         LogService.instance.error(
             LogCategory.engine, 'Download event stream error', e.toString());
       });
-      final res = await _method.invokeMethod<String>('init');
+      // v1.0.1: never hang forever if the native side never answers.
+      final res = await _method
+          .invokeMethod<String>('init')
+          .timeout(const Duration(seconds: 30));
       _engineVersion = res ?? '';
       _initialized = true;
       LogService.instance.add(
@@ -54,6 +57,10 @@ class EngineService {
     } on MissingPluginException {
       LogService.instance.error(LogCategory.engine, 'Download service unavailable',
           'Download service is not present in this build');
+      return false;
+    } on TimeoutException {
+      LogService.instance.error(LogCategory.engine,
+          'Download service failed to start', 'Timed out while starting');
       return false;
     } catch (e) {
       LogService.instance
@@ -242,6 +249,11 @@ class EngineService {
     required String formatId,
     required bool audioOnly,
   }) async {
+    // v1.0.1: lazy start — the download service only starts when a real
+    // download begins, never at app launch.
+    if (!await init()) {
+      throw Exception(SettingsService.instance.tr('engine_unavailable'));
+    }
     await _method.invokeMethod('startDownload', {
       'id': id,
       'url': url,
@@ -260,6 +272,10 @@ class EngineService {
     required String formatId,
     required bool audioOnly,
   }) async {
+    // v1.0.1: lazy start — same guard as startDownload.
+    if (!await init()) {
+      throw Exception(SettingsService.instance.tr('engine_unavailable'));
+    }
     await _method.invokeMethod('resumeDownload', {
       'id': id,
       'url': url,
