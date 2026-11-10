@@ -38,6 +38,12 @@ class MainActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var engineReady = false
     private var ffmpegDir: String? = null
+    // v1.0.3: serialize setup attempts — a second init call while one
+    // is in progress waits for the first attempt's outcome instead of
+    // starting a second extraction.
+    private val engineInitLock = Any()
+    private var engineInitInProgress = false
+    private val pendingInitResults = mutableListOf<MethodChannel.Result>()
     private var adblockChannel: MethodChannel? = null
     private var vpnConsentIntent: Intent? = null
 
@@ -167,6 +173,7 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "downloadDir" -> result.success(downloadDir().absolutePath)
+                    "freeSpaceMb" -> result.success(freeInternalStorageMb())
                     "openFile" -> {
                         val path = call.argument<String>("path") ?: ""
                         result.success(openFile(path))
@@ -188,6 +195,19 @@ class MainActivity : FlutterActivity() {
             }
             return
         }
+        // v1.0.3: a second call while a setup is in progress queues
+        // behind it and gets the same outcome — never a second
+        // concurrent extraction.
+        val startNow = synchronized(engineInitLock) {
+            pendingInitResults.add(result)
+            if (engineInitInProgress) {
+                false
+            } else {
+                engineInitInProgress = true
+                true
+            }
+        }
+        if (!startNow) return
         Thread {
             try {
                 YoutubeDL.init(applicationContext)
@@ -204,17 +224,97 @@ class MainActivity : FlutterActivity() {
                 } catch (t: Throwable) {
                     ""
                 }
-                mainHandler.post { result.success(version) }
+                mainHandler.post { answerPendingInit { it.success(version) } }
             } catch (t: Throwable) {
                 // v1.0.1: catch Throwable (incl. UnsatisfiedLinkError and
                 // other Errors) — an uncaught Error on this worker thread
                 // kills the whole app process ("has stopped" on launch).
                 // Always answer the Dart side so it never hangs.
+                // v1.0.3: attach diagnostics (type, message, frames, free
+                // space) — the message alone was null on the field
+                // device, so the log could not name the real cause.
+                val diagnostics = buildInitDiagnostics(t)
                 mainHandler.post {
-                    result.error("ENGINE_INIT", t.message, null)
+                    answerPendingInit {
+                        it.error("ENGINE_INIT", t.message, diagnostics)
+                    }
                 }
             }
         }.start()
+    }
+
+    /** Answer every init call that waited on the current attempt, then reset. */
+    private fun answerPendingInit(answer: (MethodChannel.Result) -> Unit) {
+        val waiting = synchronized(engineInitLock) {
+            engineInitInProgress = false
+            val list = pendingInitResults.toList()
+            pendingInitResults.clear()
+            list
+        }
+        waiting.forEach { r ->
+            try {
+                answer(r)
+            } catch (_: Throwable) {
+                // A caller that went away must not break the others.
+            }
+        }
+    }
+
+    /**
+     * Diagnostics for a failed setup: exception type, message, own-code
+     * frames and free internal storage. Library internals are never
+     * named here — a type is shown only for generic JVM failures,
+     * anything else is reported as a download-library failure, and
+     * only our own stack frames are included.
+     */
+    private fun buildInitDiagnostics(t: Throwable): String {
+        val type = sanitizeInitErrorType(t)
+        val cause = t.cause?.let { sanitizeInitErrorType(it) }
+        val message = sanitizeText(t.message ?: "null")
+        val frames = t.stackTrace
+            .filter { it.className.startsWith("com.valor.snapdl") }
+            .take(3)
+            .joinToString("; ") {
+                "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}"
+            }
+        val freeMb = freeInternalStorageMb()
+        val causePart =
+            if (cause != null && cause != type) " cause=$cause" else ""
+        return "type=$type$causePart message=$message frames=[$frames] freeMB=$freeMb"
+    }
+
+    private fun sanitizeInitErrorType(t: Throwable): String {
+        val simple = t.javaClass.simpleName
+        val generic = setOf(
+            "NullPointerException", "OutOfMemoryError", "UnsatisfiedLinkError",
+            "IOException", "IllegalStateException", "IllegalArgumentException",
+            "RuntimeException", "Exception", "Error", "StackOverflowError",
+            "SecurityException", "NoClassDefFoundError", "ClassNotFoundException",
+            "InterruptedException", "TimeoutException",
+        )
+        return if (simple in generic) simple else "download library error"
+    }
+
+    /** Strip any library / engine naming from a message before it reaches
+     * the diagnostics log (a user-visible surface). */
+    private fun sanitizeText(text: String): String {
+        var out = text.replace("\n", " ").replace("\r", " ")
+        for (word in listOf(
+            "yt-dlp", "ytdlp", "youtube-dl", "youtubedl",
+            "libffmpeg", "ffmpeg", "engine"
+        )) {
+            out = out.replace(word, "service", ignoreCase = true)
+        }
+        return out.take(300)
+    }
+
+    private fun freeInternalStorageMb(): Long {
+        return try {
+            android.os.StatFs(filesDir.absolutePath)
+                .availableBytes / (1024 * 1024)
+        } catch (_: Exception) {
+            -1
+        }
     }
 
     /** Locate the extracted ffmpeg executable so yt-dlp can merge / convert. */

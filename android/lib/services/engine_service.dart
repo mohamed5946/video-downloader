@@ -36,36 +36,65 @@ class EngineService {
 
   Future<bool> init() async {
     if (_initialized) return true;
+    _sub ??= _events.receiveBroadcastStream().listen((event) {
+      if (event is Map) {
+        _progressController.add(Map<String, dynamic>.from(event));
+      }
+    }, onError: (Object e) {
+      LogService.instance.error(
+          LogCategory.engine, 'Download event stream error', e.toString());
+    });
+    // v1.0.3: log free internal storage at setup time (helps rule
+    // storage in or out of a startup failure).
+    await _logFreeSpace();
+    // v1.0.3: one automatic retry — the first setup can fail
+    // transiently. The native side queues a second call while one is
+    // in progress, so the retry never starts a second extraction.
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        // v1.0.3: 120s — the first setup can be slow.
+        final res = await _method
+            .invokeMethod<String>('init')
+            .timeout(const Duration(seconds: 120));
+        _engineVersion = res ?? '';
+        _initialized = true;
+        LogService.instance.add(
+            LogCategory.engine, 'Download service ready');
+        return true;
+      } on MissingPluginException {
+        LogService.instance.error(LogCategory.engine, 'Download service unavailable',
+            'Download service is not present in this build');
+        return false;
+      } on TimeoutException {
+        LogService.instance.error(LogCategory.engine,
+            'Download service failed to start',
+            'Timed out while starting (attempt $attempt of 2)');
+      } on PlatformException catch (e) {
+        // v1.0.3: log the full failure including the native diagnostics
+        // string (type, message, frames, free space) — the message
+        // alone was null on the field device.
+        LogService.instance.error(LogCategory.engine,
+            'Download service failed to start',
+            '${e.code}: ${e.message} | ${e.details}');
+      } catch (e) {
+        LogService.instance
+            .error(LogCategory.engine, 'Download service failed to start', e.toString());
+      }
+      if (attempt == 1) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+    return false;
+  }
+
+  Future<void> _logFreeSpace() async {
     try {
-      _sub ??= _events.receiveBroadcastStream().listen((event) {
-        if (event is Map) {
-          _progressController.add(Map<String, dynamic>.from(event));
-        }
-      }, onError: (Object e) {
-        LogService.instance.error(
-            LogCategory.engine, 'Download event stream error', e.toString());
-      });
-      // v1.0.1: never hang forever if the native side never answers.
-      final res = await _method
-          .invokeMethod<String>('init')
-          .timeout(const Duration(seconds: 30));
-      _engineVersion = res ?? '';
-      _initialized = true;
-      LogService.instance.add(
-          LogCategory.engine, 'Download service ready');
-      return true;
-    } on MissingPluginException {
-      LogService.instance.error(LogCategory.engine, 'Download service unavailable',
-          'Download service is not present in this build');
-      return false;
-    } on TimeoutException {
-      LogService.instance.error(LogCategory.engine,
-          'Download service failed to start', 'Timed out while starting');
-      return false;
-    } catch (e) {
-      LogService.instance
-          .error(LogCategory.engine, 'Download service failed to start', e.toString());
-      return false;
+      final mb = await _method.invokeMethod<int>('freeSpaceMb');
+      if (mb != null) {
+        LogService.instance.add(LogCategory.storage, 'Free space: $mb MB');
+      }
+    } catch (_) {
+      // Non-fatal: setup proceeds without the number.
     }
   }
 

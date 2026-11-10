@@ -174,17 +174,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 12),
                 _ErrorBanner(message: c.fetchError!),
               ],
-              if (c.url.isNotEmpty &&
-                  c.formats.isEmpty &&
-                  !c.fetchingFormats) ...[
+              if (c.url.isNotEmpty && c.formats.isEmpty) ...[
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
-                  child: GlassButton(
-                    label: settings.tr('home_get_options'),
-                    icon: Icons.search_rounded,
-                    onPressed: () => c.fetchFormats(),
-                  ),
+                  child: c.fetchingFormats
+                      // v1.0.3: while the download service is still being
+                      // prepared (first run can take a while), show a
+                      // disabled preparing button — the red error only
+                      // appears after the setup actually fails.
+                      ? GlassButton(
+                          label: settings.tr('home_preparing'),
+                          icon: Icons.hourglass_top_rounded,
+                          onPressed: null,
+                          enabled: false,
+                        )
+                      : GlassButton(
+                          label: settings.tr('home_get_options'),
+                          icon: Icons.search_rounded,
+                          onPressed: () => c.fetchFormats(),
+                        ),
                 ),
               ],
               if (c.active.isNotEmpty) ...[
