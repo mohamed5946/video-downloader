@@ -121,6 +121,60 @@ class MainActivity : FlutterActivity() {
                 } catch (_: Throwable) {}
             }
         }
+
+        EventChannel(messenger, "com.valor.snapdl/engine_events")
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(args: Any?, events: EventChannel.EventSink?) {
+                    eventSink = events
+                }
+
+                override fun onCancel(args: Any?) {
+                    eventSink = null
+                }
+            })
+
+        MethodChannel(messenger, "com.valor.snapdl/engine")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "init" -> initEngine(result)
+                    "fetchFormats" -> {
+                        val url = call.argument<String>("url") ?: ""
+                        Thread { fetchFormats(url, result) }.start()
+                    }
+                    "startDownload", "resumeDownload" -> {
+                        val id = call.argument<String>("id") ?: ""
+                        val url = call.argument<String>("url") ?: ""
+                        val formatId = call.argument<String>("formatId") ?: "best"
+                        val audioOnly = call.argument<Boolean>("audioOnly") ?: false
+                        Thread { runDownload(id, url, formatId, audioOnly, result) }.start()
+                    }
+                    "pauseDownload" -> {
+                        val id = call.argument<String>("id") ?: ""
+                        val stopped = try {
+                            YoutubeDL.destroyProcessById(id)
+                        } catch (e: Exception) {
+                            false
+                        }
+                        result.success(stopped)
+                    }
+                    "cancelDownload" -> {
+                        val id = call.argument<String>("id") ?: ""
+                        try {
+                            YoutubeDL.destroyProcessById(id)
+                        } catch (e: Exception) {
+                            // Already finished / never started.
+                        }
+                        result.success(true)
+                    }
+                    "downloadDir" -> result.success(downloadDir().absolutePath)
+                    "freeSpaceMb" -> result.success(freeInternalStorageMb())
+                    "openFile" -> {
+                        val path = call.argument<String>("path") ?: ""
+                        result.success(openFile(path))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     // v1.0.4: the actual adblock calls, invoked through the guarded
@@ -196,61 +250,6 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 else -> result.notImplemented()
-            }
-    }
-
-        EventChannel(messenger, "com.valor.snapdl/engine_events")
-            .setStreamHandler(object : EventChannel.StreamHandler {
-                override fun onListen(args: Any?, events: EventChannel.EventSink?) {
-                    eventSink = events
-                }
-
-                override fun onCancel(args: Any?) {
-                    eventSink = null
-                }
-            })
-
-        MethodChannel(messenger, "com.valor.snapdl/engine")
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "init" -> initEngine(result)
-                    "fetchFormats" -> {
-                        val url = call.argument<String>("url") ?: ""
-                        Thread { fetchFormats(url, result) }.start()
-                    }
-                    "startDownload", "resumeDownload" -> {
-                        val id = call.argument<String>("id") ?: ""
-                        val url = call.argument<String>("url") ?: ""
-                        val formatId = call.argument<String>("formatId") ?: "best"
-                        val audioOnly = call.argument<Boolean>("audioOnly") ?: false
-                        Thread { runDownload(id, url, formatId, audioOnly, result) }.start()
-                    }
-                    "pauseDownload" -> {
-                        val id = call.argument<String>("id") ?: ""
-                        val stopped = try {
-                            YoutubeDL.destroyProcessById(id)
-                        } catch (e: Exception) {
-                            false
-                        }
-                        result.success(stopped)
-                    }
-                    "cancelDownload" -> {
-                        val id = call.argument<String>("id") ?: ""
-                        try {
-                            YoutubeDL.destroyProcessById(id)
-                        } catch (e: Exception) {
-                            // Already finished / never started.
-                        }
-                        result.success(true)
-                    }
-                    "downloadDir" -> result.success(downloadDir().absolutePath)
-                    "freeSpaceMb" -> result.success(freeInternalStorageMb())
-                    "openFile" -> {
-                        val path = call.argument<String>("path") ?: ""
-                        result.success(openFile(path))
-                    }
-                    else -> result.notImplemented()
-                }
             }
     }
 
