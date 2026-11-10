@@ -1,0 +1,24 @@
+# Node / Electron
+node_modules/
+dist/
+*.log
+
+# Flutter / Android
+.dart_tool/
+build/
+.gradle/
+local.properties
+*.iml
+.idea/
+web/
+
+# Binaries & packages
+*.apk
+*.aab
+*.zip
+*.exe
+*.dll
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,59 @@
+/* SnapDL floating button — Liquid Glass, same identity as the desktop app. */
+.snapdl-dl-btn {
+  position: fixed;
+  z-index: 2147483647;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: .2px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(78, 122, 142, .94), rgba(62, 98, 116, .94));
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 10px 28px rgba(31, 42, 51, .55), inset 0 1px 0 rgba(255, 255, 255, .4);
+  opacity: 0;
+  transform: translateY(-6px) scale(.96);
+  transition: opacity .3s cubic-bezier(.22, 1, .36, 1), transform .3s cubic-bezier(.22, 1, .36, 1), filter .2s ease;
+}
+.snapdl-dl-btn.snapdl-dl-show { display: inline-flex; opacity: 1; transform: translateY(0) scale(1); }
+.snapdl-dl-btn:hover { filter: brightness(1.12); transform: translateY(-1px) scale(1.02); }
+.snapdl-dl-btn:active { transform: scale(.97); }
+.snapdl-dl-btn.snapdl-dl-busy { opacity: .85; pointer-events: none; }
+.snapdl-dl-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(255, 255, 255, .25);
+  font-size: 14px; font-weight: 800; line-height: 1;
+}
+
+/* In-page toast */
+.fetch-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translate(-50%, 80px);
+  z-index: 2147483647;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 650;
+  color: #f7f4e9;
+  background: rgba(31, 42, 51, .94);
+  border: 1px solid rgba(255, 255, 255, .25);
+  box-shadow: 0 14px 34px rgba(31, 42, 51, .6);
+  opacity: 0;
+  transition: all .4s cubic-bezier(.22, 1, .36, 1);
+  pointer-events: none;
+  max-width: 88vw;
+  text-align: center;
+}
+.fetch-toast-show { opacity: 1; transform: translate(-50%, 0); }
+.fetch-toast-error { border-color: rgba(179, 38, 30, .6); color: #fda4af; }

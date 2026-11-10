@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>YouTube — Big Buck Bunny 4K 60fps (preview mock)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, Arial, sans-serif; background: #0f0f0f; color: #f1f1f1; }
+  .topbar { display: flex; align-items: center; gap: 18px; padding: 10px 20px; background: #0f0f0f; }
+  .yt-logo { display: flex; align-items: center; gap: 6px; font-size: 19px; font-weight: 700; letter-spacing: -1px; }
+  .yt-logo .play { width: 30px; height: 21px; background: #ff0000; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; }
+  .search { flex: 1; max-width: 560px; margin: 0 auto; display: flex; }
+  .search input { flex: 1; padding: 10px 16px; border-radius: 20px 0 0 20px; border: 1px solid #303030; background: #121212; color: #f1f1f1; font-size: 15px; outline: none; }
+  .search button { padding: 0 18px; border-radius: 0 20px 20px 0; border: 1px solid #303030; background: #222; color: #f1f1f1; cursor: pointer; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #0ea5e9, #a855f7); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .watch { max-width: 1180px; margin: 0 auto; padding: 18px 24px; }
+  .player {
+    position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 14px; overflow: hidden;
+    background:
+      radial-gradient(80% 90% at 30% 20%, rgba(56,189,248,.55), transparent 60%),
+      radial-gradient(70% 80% at 85% 30%, rgba(168,85,247,.5), transparent 60%),
+      radial-gradient(90% 90% at 60% 100%, rgba(34,197,94,.45), transparent 60%),
+      linear-gradient(140deg, #1b2a52, #0b1026);
+  }
+  .player .big-play {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 74px; height: 74px; border-radius: 50%; background: rgba(0,0,0,.55);
+    border: 2px solid rgba(255,255,255,.85); display: flex; align-items: center; justify-content: center;
+    font-size: 28px; color: #fff; padding-left: 6px;
+  }
+  .player .vid-label { position: absolute; left: 18px; bottom: 56px; font-size: 13px; color: rgba(255,255,255,.75); letter-spacing: .4px; }
+  .player .controls { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 14px 10px; }
+  .player .track { height: 5px; border-radius: 99px; background: rgba(255,255,255,.3); overflow: hidden; }
+  .player .track i { display: block; height: 100%; width: 47%; background: #ff0000; border-radius: 99px; }
+  .player .ctrl-row { display: flex; gap: 16px; align-items: center; margin-top: 10px; font-size: 15px; color: #fff; }
+  .player .time { font-size: 12.5px; color: rgba(255,255,255,.85); }
+  .player .spacer { flex: 1; }
+  .title { margin-top: 16px; font-size: 20px; font-weight: 700; line-height: 1.4; }
+  .channel { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  .channel .c-av { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #ef4444); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .channel .c-name { font-size: 16px; font-weight: 700; }
+  .channel .c-sub { font-size: 12.5px; color: #aaa; }
+  .sub-btn { margin-left: auto; padding: 10px 18px; border-radius: 999px; border: none; background: #fff; color: #0f0f0f; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .desc { margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: #272727; font-size: 13.5px; line-height: 1.6; color: #e5e5e5; }
+  .mock-note { margin-top: 14px; font-size: 11.5px; color: #717171; }
+  /* ---- SnapDL floating button (same design as extension/content.css) ---- */
+  .snapdl-dl-btn {
+    position: fixed; z-index: 2147483647; display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px; font-family: "Segoe UI", system-ui, Arial, sans-serif; font-size: 14px; font-weight: 700;
+    color: #fff; letter-spacing: .2px; cursor: pointer; border: 1px solid rgba(255,255,255,.45); border-radius: 999px;
+    background: linear-gradient(135deg, rgba(78,122,142,.94), rgba(62,98,116,.94));
+    box-shadow: 0 10px 28px rgba(31,42,51,.55), inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .snapdl-dl-ic { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.25); font-size: 14px; font-weight: 800; }
+  .snapdl-toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 0); z-index: 2147483647;
+    padding: 12px 20px; border-radius: 999px; font-family: "Segoe UI", system-ui, Arial, sans-serif; font-size: 14px; font-weight: 650;
+    color: #f7f4e9; background: rgba(31,42,51,.94); border: 1px solid rgba(255,255,255,.25);
+    box-shadow: 0 14px 34px rgba(31,42,51,.6);
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="yt-logo"><span class="play">▶</span> YouTube</div>
+    <div class="search"><input value="Big Buck Bunny 4K 60fps"><button>🔍</button></div>
+    <div class="avatar">M</div>
+  </div>
+  <div class="watch">
+    <div class="player" id="player">
+      <div class="big-play">▶</div>
+      <div class="vid-label">Big Buck Bunny — 4K 60fps (sample video frame)</div>
+      <div class="controls">
+        <div class="track"><i></i></div>
+        <div class="ctrl-row"><span>⏸</span><span>🔊</span><span class="time">4:41 / 9:56</span><span class="spacer"></span><span>⚙</span><span>⛶</span></div>
+      </div>
+    </div>
+    <div class="title">Big Buck Bunny 4K 60fps — Official Blender Open Movie</div>
+    <div class="channel">
+      <div class="c-av">B</div>
+      <div><div class="c-name">Blender Foundation</div><div class="c-sub">1.2M subscribers</div></div>
+      <button class="sub-btn">Subscribe</button>
+    </div>
+    <div class="desc">The famous open movie "Big Buck Bunny" — a short film by the Blender Institute. This page is a mock used to preview the SnapDL browser-extension button.</div>
+    <div class="mock-note">Mock YouTube page — for previewing the SnapDL extension overlay only.</div>
+  </div>
+  <!-- Floating SnapDL button, positioned over the player's top-right corner -->
+  <button class="snapdl-dl-btn" id="snapBtn" style="top: 92px; left: 1010px;"><span class="snapdl-dl-ic">↓</span> تنزيل الفيديو</button>
+  <div class="snapdl-toast">تم الإرسال إلى SnapDL — جارٍ التنزيل…</div>
+  <script>
+    // Keep the button glued to the player's top-right corner on resize.
+    function place() {
+      var p = document.getElementById('player').getBoundingClientRect();
+      var b = document.getElementById('snapBtn');
+      b.style.top = Math.max(8, p.top + 12) + 'px';
+      b.style.left = Math.max(8, Math.min(window.innerWidth - 190, p.right - 178)) + 'px';
+    }
+    window.addEventListener('resize', place);
+    place();
+  </script>
+</body>
+</html>

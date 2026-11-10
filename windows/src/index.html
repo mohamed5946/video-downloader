@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SnapDL — Video Downloader</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="aurora" aria-hidden="true">
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+  <div class="orb orb-c"></div>
+  <div class="grain"></div>
+</div>
+
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar glass">
+    <div class="brand">
+      <div class="logo"><img src="logo.png" alt="SnapDL logo"></div>
+      <div class="brand-text">
+        <div class="brand-name">SnapDL</div>
+        <div class="brand-sub" data-i18n="brandSub">Video Downloader</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-view="download"><span class="nav-ic">↓</span> <span data-i18n="navDownload">Download</span></button>
+      <button class="nav-btn" data-view="youtube"><span class="nav-ic">▶</span> <span data-i18n="navYoutube">YouTube</span></button>
+      <button class="nav-btn" data-view="history"><span class="nav-ic">◷</span> <span data-i18n="navHistory">History</span> <span class="nav-count" id="historyCount"></span></button>
+      <button class="nav-btn" data-view="settings"><span class="nav-ic">⚙</span> <span data-i18n="navSettings">Settings</span></button>
+    </nav>
+    <div class="sidebar-foot">
+      <button id="updateBtn" class="glass-btn wide">↻&nbsp; <span data-i18n="checkUpdates">Check for updates</span></button>
+      <div class="version" id="versionLabel">SnapDL v1.0.0</div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+    <!-- DOWNLOAD VIEW -->
+    <section id="view-download" class="view active">
+      <header class="page-head">
+        <h1><span data-i18n="dlTitle1">Paste a link.</span> <span class="grad-text" data-i18n="dlTitle2">Get the video.</span></h1>
+        <p class="page-sub" data-i18n="dlSub">YouTube · TikTok · Instagram · Facebook · X — free, no ads, no sign-in.</p>
+      </header>
+
+      <div class="glass card">
+        <label class="field-label" for="urlInput" data-i18n="videoLink">Video link</label>
+        <div class="url-row">
+          <input id="urlInput" type="text" data-i18n-ph="urlPlaceholder" placeholder="https://www.youtube.com/watch?v=…  or  TikTok / Instagram / Facebook / X link" autocomplete="off" spellcheck="false">
+          <button id="fetchInfoBtn" class="btn-primary" data-i18n="getInfo">Get info</button>
+        </div>
+        <div class="platform-chips" id="platformChips">
+          <span class="chip">▶ YouTube</span><span class="chip">♪ TikTok</span><span class="chip">▣ Instagram</span><span class="chip">f Facebook</span><span class="chip">𝕏 X</span>
+        </div>
+        <div id="previewCard" class="glass card preview-card hidden">
+          <div id="previewLoading" class="preview-loading hidden">
+            <div class="spinner"></div>
+            <div class="preview-skeleton">
+              <div class="skeleton" style="width: 70%"></div>
+              <div class="skeleton" style="width: 45%"></div>
+            </div>
+            <span class="preview-loading-text" data-i18n="previewLoading">Fetching video info…</span>
+          </div>
+          <div id="previewBody" class="preview-body hidden">
+            <div class="preview-thumb">
+              <img id="previewThumb" alt="">
+              <button id="previewPlayBtn" class="preview-play" data-i18n-title="previewPlay" title="Play preview">▶</button>
+              <span class="preview-duration" id="infoDuration"></span>
+            </div>
+            <div class="preview-info">
+              <div class="preview-title" id="infoTitle"></div>
+              <div class="preview-meta"><span class="badge" id="infoPlatform"></span><span id="infoUploader"></span></div>
+              <div class="preview-quality-label" data-i18n="quality">Quality</div>
+              <div class="preview-quality" id="previewQuality"></div>
+            </div>
+          </div>
+        </div>
+        <div id="fetchError" class="error-box hidden"></div>
+      </div>
+
+      <div class="glass card">
+        <label class="field-label" data-i18n="quality">Quality</label>
+        <div class="quality-grid" id="qualityGrid">
+          <button class="quality-pill selected" data-quality="highest"><span data-i18n="qHighest">Highest</span><span data-i18n="qHighestSub">Best available</span></button>
+          <button class="quality-pill" data-quality="4k">4K<span>2160p</span></button>
+          <button class="quality-pill" data-quality="1080p">1080p<span data-i18n="qFullHD">Full HD</span></button>
+          <button class="quality-pill" data-quality="720p">720p<span>HD</span></button>
+          <button class="quality-pill" data-quality="lowest"><span data-i18n="qLowest">Lowest</span><span data-i18n="qLowestSub">Smallest file</span></button>
+          <button class="quality-pill" data-quality="audio"><span data-i18n="qAudio">Audio only</span><span>MP3</span></button>
+        </div>
+        <div class="folder-row">
+          <span class="folder-label" data-i18n="saveTo">Save to</span>
+          <span class="folder-path" id="folderPath">…</span>
+          <button id="changeFolderBtn" class="glass-btn" data-i18n="change">Change</button>
+        </div>
+        <button id="downloadBtn" class="btn-download">↓&nbsp; <span data-i18n="download">Download</span></button>
+      </div>
+
+      <div id="jobsList"></div>
+
+      <div class="glass card">
+        <div class="browser-title" data-i18n="browserTitle">Browser integration — like IDM</div>
+        <div class="browser-sub" data-i18n="browserSub">Install the SnapDL extension in Edge or Chrome and a “Download video” button appears over any video playing in the browser. Right-click any link or image → Download with SnapDL. The app must be running for the button to work.</div>
+        <div class="browser-actions">
+          <button id="openExtFolderBtn" class="glass-btn" data-i18n="openExtFolder">Open extension folder</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- YOUTUBE VIEW -->
+    <section id="view-youtube" class="view">
+      <header class="page-head">
+        <h1>YouTube <span class="grad-text" data-i18n="ytInApp">in SnapDL</span></h1>
+        <p class="page-sub" data-i18n="ytSub">Watch YouTube inside the app. Ads are shown normally. Use the button below to download the video you're watching.</p>
+      </header>
+      <div class="glass card yt-toolbar">
+        <button id="ytBack" class="glass-btn" title="Back">←</button>
+        <button id="ytForward" class="glass-btn" title="Forward">→</button>
+        <button id="ytReload" class="glass-btn" title="Reload">↻</button>
+        <button id="ytHome" class="glass-btn" title="Home">⌂</button>
+        <span class="yt-url" id="ytUrl">youtube.com</span>
+        <button id="ytDownloadBtn" class="btn-primary">↓ <span data-i18n="ytDownloadBtn">Download this video</span></button>
+      </div>
+      <div class="glass card yt-frame">
+        <webview id="ytView" src="https://www.youtube.com/" preload="webview-preload.js" partition="persist:snapdl-youtube" allowpopups></webview>
+      </div>
+      <p class="yt-note" data-i18n="ytNote">Note: Google sign-in inside the app is best-effort — Google may block sign-in in embedded views. If it doesn't work, sign in from Edge or Chrome instead. Your downloads still work without signing in.</p>
+    </section>
+
+    <!-- HISTORY VIEW -->
+    <section id="view-history" class="view">
+      <header class="page-head">
+        <h1><span data-i18n="histTitle1">Download</span> <span class="grad-text" data-i18n="histTitle2">history</span></h1>
+        <p class="page-sub" data-i18n="histSub">Everything you downloaded, stored on this device only.</p>
+      </header>
+      <div class="history-tools">
+        <button id="openFolderBtn" class="glass-btn" data-i18n="openFolder">Open download folder</button>
+        <span class="history-count" id="historyCountLabel"></span>
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <div id="historyEmpty" class="glass card empty-state">
+        <div class="empty-ic">↓</div>
+        <p><span data-i18n="histEmpty1">No downloads yet.</span><br><span data-i18n="histEmpty2">Paste a link on the Download page and your history will appear here.</span></p>
+      </div>
+    </section>
+
+    <!-- SETTINGS VIEW -->
+    <section id="view-settings" class="view">
+      <header class="page-head">
+        <h1 data-i18n="settingsTitle">Settings</h1>
+        <p class="page-sub" data-i18n="settingsSub">Tap a row to open its own screen.</p>
+      </header>
+      <div class="settings-list" id="settingsList">
+        <button class="setting-row glass" data-setting="appearance"><span class="setting-ic">◐</span><span class="setting-text"><b data-i18n="setAppearance">Appearance</b><i data-i18n="setAppearanceSub">Dark · Light · Follow system</i></span><span class="setting-chev">‹</span></button>
+        <button class="setting-row glass" data-setting="language"><span class="setting-ic">ع</span><span class="setting-text"><b data-i18n="setLanguage">Language</b><i>العربية · English</i></span><span class="setting-chev">‹</span></button>
+        <button class="setting-row glass" data-setting="downloads"><span class="setting-ic">↓</span><span class="setting-text"><b data-i18n="setDownloads">Downloads</b><i data-i18n="setDownloadsSub">Folder · Default quality · Wi-Fi only</i></span><span class="setting-chev">‹</span></button>
+        <button class="setting-row glass" data-setting="adblock"><span class="setting-ic">⊘</span><span class="setting-text"><b data-i18n="setAdblock">Ad Blocker</b><i data-i18n="setAdblockSub">Block ads in your browser</i></span><span class="setting-chev">‹</span></button>
+        <button class="setting-row glass" data-setting="extension"><span class="setting-ic">🧩</span><span class="setting-text"><b data-i18n="setExtension">Browser Extension</b><i>Edge · Chrome</i></span><span class="setting-chev">‹</span></button>
+        <button class="setting-row glass" data-setting="updates"><span class="setting-ic">↻</span><span class="setting-text"><b data-i18n="setUpdates">Updates</b><i data-i18n="setUpdatesSub">Check for a new version</i></span><span class="setting-chev">‹</span></button>
+        <button class="setting-row glass" data-setting="logs"><span class="setting-ic">≡</span><span class="setting-text"><b data-i18n="setLogs">سجل التشخيص</b><i data-i18n="setLogsSub">Every event, with the exact reason when something fails</i></span><span class="setting-chev">‹</span></button>
+        <button class="setting-row glass" data-setting="about"><span class="setting-ic">i</span><span class="setting-text"><b data-i18n="setAbout">About</b><i>SnapDL · Mohamed El Sayed</i></span><span class="setting-chev">‹</span></button>
+      </div>
+
+      <!-- ======= SUB-SCREENS ======= -->
+      <div id="subScreens">
+
+        <div class="sub-screen hidden" id="sub-appearance">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setAppearance">Appearance</h2>
+          <p class="sub-desc" data-i18n="appearanceDesc">Choose how SnapDL looks. It applies immediately.</p>
+          <div class="option-list">
+            <button class="option-card glass" data-theme-opt="dark"><b data-i18n="themeDark">Dark</b><i data-i18n="themeDarkSub">Dark glass, easy on the eyes at night</i></button>
+            <button class="option-card glass" data-theme-opt="light"><b data-i18n="themeLight">Light</b><i data-i18n="themeLightSub">Bright and clean</i></button>
+            <button class="option-card glass" data-theme-opt="system"><b data-i18n="themeSystem">Follow system</b><i data-i18n="themeSystemSub">Match Windows light / dark mode</i></button>
+          </div>
+        </div>
+
+        <div class="sub-screen hidden" id="sub-language">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setLanguage">Language</h2>
+          <p class="sub-desc" data-i18n="languageDesc">Applies immediately.</p>
+          <div class="option-list">
+            <button class="option-card glass" data-lang-opt="ar"><b>العربية</b><i>Arabic — right to left</i></button>
+            <button class="option-card glass" data-lang-opt="en"><b>English</b><i>English — left to right</i></button>
+          </div>
+        </div>
+
+        <div class="sub-screen hidden" id="sub-downloads">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setDownloads">Downloads</h2>
+          <div class="glass card sub-card">
+            <label class="field-label" data-i18n="saveTo">Save to</label>
+            <div class="folder-row">
+              <span class="folder-path" id="dlFolderPath">…</span>
+              <button id="dlChangeFolderBtn" class="glass-btn" data-i18n="change">Change</button>
+            </div>
+          </div>
+          <div class="glass card sub-card">
+            <label class="field-label" data-i18n="defaultQuality">Default quality</label>
+            <div class="quality-grid" id="dlQualityGrid">
+              <button class="quality-pill" data-quality="highest"><span data-i18n="qHighest">Highest</span></button>
+              <button class="quality-pill" data-quality="4k">4K</button>
+              <button class="quality-pill" data-quality="1080p">1080p</button>
+              <button class="quality-pill" data-quality="720p">720p</button>
+              <button class="quality-pill" data-quality="lowest"><span data-i18n="qLowest">Lowest</span></button>
+              <button class="quality-pill" data-quality="audio"><span data-i18n="qAudio">Audio only</span></button>
+            </div>
+          </div>
+          <div class="glass card sub-card">
+            <div class="switch-row">
+              <div><b data-i18n="wifiOnly">Wi-Fi only</b><i data-i18n="wifiOnlySub">Only download when you're connected to Wi-Fi</i></div>
+              <label class="switch"><input type="checkbox" id="wifiToggle"><span class="slider"></span></label>
+            </div>
+            <div class="switch-row">
+              <div><b data-i18n="maxConc">Max simultaneous downloads</b><i data-i18n="maxConcSub">How many downloads run at the same time</i></div>
+              <div class="seg" id="maxConcSeg">
+                <button data-max="1">1</button><button data-max="2">2</button><button data-max="3">3</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-screen hidden" id="sub-adblock">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setAdblock">Ad Blocker</h2>
+          <p class="sub-desc" data-i18n="adblockDesc">Blocks ads inside Edge and Chrome, using the SnapDL browser extension (EasyList rules). Browser only — nothing system-wide.</p>
+          <div class="glass card sub-card">
+            <div class="switch-row">
+              <div><b data-i18n="adblockToggle">Ad Blocker</b><i id="adblockStatus">…</i></div>
+              <label class="switch"><input type="checkbox" id="adblockToggle"><span class="slider"></span></label>
+            </div>
+            <div class="stat-row"><span data-i18n="adblockBlocked">Ads blocked</span><b id="adblockBlocked">0</b></div>
+            <div class="stat-row"><span data-i18n="adblockRules">Filter rules</span><b>15,000 · EasyList</b></div>
+            <p class="sub-note" data-i18n="adblockNote">YouTube video ads are not blocked — they come from the same domain as the video. Download the video with SnapDL instead.</p>
+          </div>
+        </div>
+
+        <div class="sub-screen hidden" id="sub-extension">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setExtension">Browser Extension</h2>
+          <div class="glass card sub-card">
+            <div class="stat-row"><span data-i18n="extStatus">Status</span><b id="extStatus">…</b></div>
+            <div class="stat-row"><span data-i18n="extServer">Local server</span><b>127.0.0.1:47811</b></div>
+            <p class="sub-note" data-i18n="extGuide">Install it once — load unpacked in developer mode:
+              Edge → edge://extensions → Developer mode → Load unpacked → pick the extension folder.
+              Chrome → chrome://extensions → same steps.
+              The SnapDL app must be running for the video button to work.</p>
+            <div class="browser-actions">
+              <button id="openExtFolderBtn2" class="glass-btn" data-i18n="openExtFolder">Open extension folder</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-screen hidden" id="sub-updates">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setUpdates">Updates</h2>
+          <div class="glass card sub-card">
+            <div class="stat-row"><span data-i18n="updCurrent">Current version</span><b id="updVersion">v1.0.0</b></div>
+            <div class="browser-actions">
+              <button id="updCheckBtn" class="btn-primary">↻ <span data-i18n="checkUpdates">Check for updates</span></button>
+            </div>
+            <div class="switch-row">
+              <div><b data-i18n="autoCheck">Check automatically</b><i data-i18n="autoCheckSub">Check for a new version when SnapDL starts</i></div>
+              <label class="switch"><input type="checkbox" id="autoCheckToggle"><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-screen hidden" id="sub-logs">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setLogs">سجل التشخيص</h2>
+          <p class="sub-desc" data-i18n="logsDesc">Every event, with the exact reason when something fails. This is how bugs get found fast.</p>
+          <div class="log-tools">
+            <select id="logFilter" class="glass-select">
+              <option value="all" data-i18n="logAll">All categories</option>
+              <option value="DOWNLOAD">Downloads</option>
+              <option value="UPDATE">Updates</option>
+              <option value="SYSTEM">System</option>
+              <option value="INFO">Info</option>
+              <option value="HISTORY">History</option>
+              <option value="error" data-i18n="logErrors">Errors only</option>
+            </select>
+            <button id="copyLogBtn" class="glass-btn" data-i18n="copyLog">Copy log</button>
+            <button id="clearLogBtn" class="btn-danger-ghost" data-i18n="clearLog">Clear log</button>
+          </div>
+          <div id="logList" class="glass card log-list"></div>
+        </div>
+
+        <div class="sub-screen hidden" id="sub-about">
+          <button class="sub-back glass-btn">‹ <span data-i18n="back">Back</span></button>
+          <h2 data-i18n="setAbout">About</h2>
+          <div class="glass card about-card">
+            <div class="about-logo"><img src="logo.png" alt="SnapDL logo"></div>
+            <div class="about-name">SnapDL</div>
+            <div class="about-version" id="aboutVersion">Version 1.0.0 · Windows</div>
+            <p class="about-desc" data-i18n="aboutDesc">A fast, beautiful downloader for YouTube, TikTok, Instagram, Facebook and X. Paste a link, pick a quality, and the video is yours — no ads, no accounts, no watermarks.</p>
+            <div class="about-rows">
+              <div class="about-row"><span data-i18n="aboutDev">Developer</span><b>Mohamed El Sayed</b></div>
+              <div class="about-row"><span data-i18n="aboutPlatform">Platform</span><b>Windows 11 · x64</b></div>
+            </div>
+            <div class="about-actions">
+              <button id="portfolioBtn" class="btn-primary" data-i18n="viewPortfolio">View my portfolio ↗</button>
+              <button id="aboutUpdateBtn" class="glass-btn">↻ <span data-i18n="checkUpdates">Check for updates</span></button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- UPDATE MODAL -->
+<div id="updateModal" class="modal hidden">
+  <div class="glass modal-card">
+    <div class="modal-title" id="updateModalTitle">Checking for updates…</div>
+    <div class="modal-body" id="updateModalBody">Please wait.</div>
+    <div class="modal-actions">
+      <button id="updateGoBtn" class="btn-primary hidden">Download update ↗</button>
+      <button id="updateCloseBtn" class="glass-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="renderer.js"></script>
+</body>
+</html>
