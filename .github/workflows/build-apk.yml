@@ -26,18 +26,32 @@ jobs:
         with:
           channel: stable
 
+      - name: Decode release keystore
+        # v1.0.2: ONE permanent keystore for all builds (secret
+        # KEYSTORE_BASE64). Earlier builds used a fresh debug key per
+        # runner, so v1.0.0 and v1.0.1 had different certificates and
+        # Android refused updates between them.
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/release.keystore
+          ls -la android/release.keystore
+
       - name: Build release APK
-        # v1.0.1: arm64-only — the universal APK bundled armeabi-v7a +
-        # x86_64 native libs (~110MB) no arm64 phone ever uses.
-        # NOTE: --target-platform alone does NOT drop the other ABIs:
-        # the ffmpeg/python .so files come from AAR dependencies and AGP
-        # packages all of them. --split-per-abi is what actually filters
-        # the APK down to one ABI.
-        run: cd android && flutter build apk --release --split-per-abi --target-platform android-arm64
+        # v1.0.2: UNIVERSAL APK again (all ABIs). v1.0.1 was an
+        # arm64-only split APK and failed to install on the user's phone
+        # ("package appears to be invalid") even after uninstalling
+        # v1.0.0; the universal v1.0.0 installed fine. Plain
+        # `flutter build apk --release` bundles all ABIs.
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: cd android && flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: snapdl-release-apk
-          path: android/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          path: android/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error

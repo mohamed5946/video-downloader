@@ -470,9 +470,8 @@ class DownloadController extends ChangeNotifier {
       ));
       notifyListeners();
     } else if (which == 'history') {
-      final now = DateTime.now();
-      // Added newest-first: HistoryService.add inserts at 0, so seed in
-      // reverse chronological order (oldest first) to display newest first.
+      // FIXED dates (not DateTime.now()): the history golden test renders
+      // these times, so relative dates made it drift on every run.
       await _history.add(HistoryEntry(
         id: 'demo-h3',
         url: 'https://www.instagram.com/reel/xyz789/',
@@ -480,7 +479,7 @@ class DownloadController extends ChangeNotifier {
         platform: PlatformKind.instagram,
         qualityLabel: 'Audio MP3',
         isAudioOnly: true,
-        date: now.subtract(const Duration(days: 2)),
+        date: DateTime(2026, 11, 8, 20, 39),
         filePath: '/storage/emulated/0/Download/SnapDL/sunset.mp3',
         fileSizeBytes: 6 * 1024 * 1024,
       ));
@@ -491,7 +490,7 @@ class DownloadController extends ChangeNotifier {
         platform: PlatformKind.tiktok,
         qualityLabel: '720p',
         isAudioOnly: false,
-        date: now.subtract(const Duration(days: 1, hours: 3)),
+        date: DateTime(2026, 11, 9, 15, 39),
         filePath: '/storage/emulated/0/Download/SnapDL/beat-drop.mp4',
         fileSizeBytes: 12 * 1024 * 1024,
       ));
@@ -502,7 +501,7 @@ class DownloadController extends ChangeNotifier {
         platform: PlatformKind.youtube,
         qualityLabel: '1080p',
         isAudioOnly: false,
-        date: now.subtract(const Duration(hours: 2)),
+        date: DateTime(2026, 11, 10, 18, 39),
         filePath: '/storage/emulated/0/Download/SnapDL/Flutter in 10 Minutes.mp4',
         fileSizeBytes: 186 * 1024 * 1024,
       ));

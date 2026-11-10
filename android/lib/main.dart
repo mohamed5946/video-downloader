@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'models.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';

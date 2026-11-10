@@ -41,11 +41,32 @@ android {
         }
     }
 
+    // v1.0.2: PERMANENT release signing. The keystore lives ONLY as the
+    // KEYSTORE_BASE64 GitHub secret (decoded to release.keystore by CI) and
+    // as a local backup in the workspace — never in the repo. Earlier builds
+    // used a fresh debug key per CI runner, so v1.0.0 and v1.0.1 had
+    // different certificates and Android refused updates between them.
+    // Locally (no release.keystore) the build falls back to the debug key
+    // so `flutter run --release` keeps working.
+    signingConfigs {
+        create("release") {
+            val keystoreFile = rootProject.file("release.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS") ?: "snapdl"
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (rootProject.file("release.keystore").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
