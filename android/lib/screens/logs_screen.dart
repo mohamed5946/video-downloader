@@ -93,7 +93,7 @@ class _LogsScreenState extends State<LogsScreen> {
                         settings.tr('logs_empty'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13),
+                            color: AppColors.textSecondaryOf(context), fontSize: 13),
                       ),
                     )
                   : StaggeredScope(
@@ -155,7 +155,7 @@ class _FilterChip extends StatelessWidget {
           style: TextStyle(
             color: selected
                 ? (color ?? AppColors.glowCyan)
-                : AppColors.textSecondary,
+                : AppColors.textSecondaryOf(context),
             fontWeight: FontWeight.w700,
             fontSize: 12,
           ),
@@ -207,7 +207,7 @@ class _LogRow extends StatelessWidget {
                     Text(
                       entry.timeText,
                       style: TextStyle(
-                          color: AppColors.textFaint, fontSize: 11),
+                          color: AppColors.textFaintOf(context), fontSize: 11),
                     ),
                   ],
                 ),
@@ -215,14 +215,14 @@ class _LogRow extends StatelessWidget {
                 Text(
                   entry.message,
                   style: TextStyle(
-                      color: AppColors.textPrimary, fontSize: 13),
+                      color: AppColors.textPrimaryOf(context), fontSize: 13),
                 ),
                 if (entry.detail != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     entry.detail!,
                     style: TextStyle(
-                        color: AppColors.textFaint, fontSize: 12),
+                        color: AppColors.textFaintOf(context), fontSize: 12),
                   ),
                 ],
               ],

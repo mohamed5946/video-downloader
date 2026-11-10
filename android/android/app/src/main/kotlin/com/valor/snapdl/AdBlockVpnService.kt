@@ -43,13 +43,23 @@ class AdBlockVpnService : VpnService() {
         private const val TAG = "SnapDL-AdBlock"
         private const val CHANNEL_ID = "snapdl_adblock"
         private const val NOTIF_ID = 1001
-        private const val PREFS = "snapdl_adblock"
+
+        // v1.0.4: PREFS / KEY_STOP_REASON are public so MainActivity can
+        // read the fail-open reason and surface it in the diagnostics log.
+        const val PREFS = "snapdl_adblock"
+        const val KEY_STOP_REASON = "adblock_stop_reason"
         private const val KEY_BLOCKED = "blocked_count"
         private const val UPSTREAM_1 = "1.1.1.1"
         private const val UPSTREAM_2 = "8.8.8.8"
         private const val DNS_PORT = 53
         private const val TUN_ADDRESS = "10.0.0.2"
         private const val DNS_ADDRESS = "10.0.0.1"
+
+        // v1.0.4 FAIL OPEN: if upstream DNS forwarding fails this many
+        // times in a row, the service stops itself instead of leaving
+        // the phone with broken DNS. The user asked for this explicitly:
+        // the internet must keep working when the blocker is on.
+        private const val MAX_CONSECUTIVE_FORWARD_FAILURES = 3
 
         @Volatile
         var isRunning = false
@@ -66,22 +76,51 @@ class AdBlockVpnService : VpnService() {
     private val pool = Executors.newCachedThreadPool()
     private val blocked = HashSet<String>()
 
+    // v1.0.4: consecutive failed upstream forwards (reset on any success).
+    // Guarded by failOpenLock; only handlePacket's pool threads touch it.
+    private var consecutiveForwardFailures = 0
+    private val failOpenLock = Any()
+    private var failOpenTriggered = false
+
     override fun onCreate() {
-        super.onCreate()
-        blockedCount.set(
-            getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getLong(KEY_BLOCKED, 0)
-        )
-        loadBlocklist()
-        createNotificationChannel()
+        // v1.0.4: a failure starting the service must never kill the app
+        // process ("SnapDL has stopped" in the field). Catch everything,
+        // log it, and carry on with an empty blocklist — the service can
+        // still start; onStartCommand decides whether it stays up.
+        try {
+            super.onCreate()
+            blockedCount.set(
+                getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .getLong(KEY_BLOCKED, 0)
+            )
+            loadBlocklist()
+            createNotificationChannel()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Ad blocker onCreate failed: ${t.javaClass.simpleName}: ${t.message}")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // v1.0.4: the whole startup is guarded — any failure stops the
+        // service gracefully (stopSelf) instead of crashing the app.
+        try {
+            return startCommandGuarded(intent, flags, startId)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Ad blocker failed to start: ${t.javaClass.simpleName}: ${t.message}")
+            try { stopSelf() } catch (_: Throwable) {}
+            return START_NOT_STICKY
+        }
+    }
+
+    private fun startCommandGuarded(intent: Intent?, flags: Int, startId: Int): Int {
         if (isRunning) return START_STICKY
         val builder = Builder()
             .setSession("SnapDL Ad Blocker")
             .addAddress(TUN_ADDRESS, 32)
             .addDnsServer(DNS_ADDRESS)
+            // v1.0.4: ONLY the DNS-server route is added — there is
+            // deliberately NO default route, so all non-DNS traffic
+            // bypasses the VPN untouched and the internet keeps working.
             .addRoute(DNS_ADDRESS, 32)
         val fd = try {
             builder.establish()
@@ -98,6 +137,8 @@ class AdBlockVpnService : VpnService() {
         tunIn = FileInputStream(fd.fileDescriptor)
         tunOut = FileOutputStream(fd.fileDescriptor)
         stopRequested = false
+        failOpenTriggered = false
+        consecutiveForwardFailures = 0
         isRunning = true
 
         val pending = PendingIntent.getActivity(
@@ -112,10 +153,46 @@ class AdBlockVpnService : VpnService() {
             .setContentIntent(pending)
             .setOngoing(true)
             .build()
-        startForeground(NOTIF_ID, notification)
+        // v1.0.4: startForeground can throw on some devices/Android
+        // versions (foreground-service rules) — that must stop the
+        // service, never crash the app.
+        try {
+            startForeground(NOTIF_ID, notification)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Ad blocker startForeground failed: ${t.javaClass.simpleName}: ${t.message}")
+            isRunning = false
+            stopSelf()
+            return START_NOT_STICKY
+        }
         Log.i(TAG, "Ad blocker started (${blocked.size} blocked domains)")
         Thread { readLoop() }.start()
         return START_STICKY
+    }
+
+    /**
+     * v1.0.4 FAIL OPEN: upstream DNS is dead — stop the service so the
+     * phone's normal DNS takes over again instead of blackholing every
+     * lookup. The reason is saved for the Dart side, which logs it in
+     * the diagnostics log and turns the UI toggle off.
+     */
+    private fun failOpen() {
+        synchronized(failOpenLock) {
+            if (failOpenTriggered) return
+            failOpenTriggered = true
+        }
+        Log.e(TAG, "Ad blocker stopped: DNS forwarding failed")
+        try {
+            getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(
+                    KEY_STOP_REASON,
+                    "Ad blocker stopped: DNS forwarding failed"
+                )
+                .apply()
+        } catch (_: Throwable) {}
+        isRunning = false
+        stopRequested = true
+        try { stopSelf() } catch (_: Throwable) {}
     }
 
     override fun onDestroy() {
@@ -209,7 +286,21 @@ class AdBlockVpnService : VpnService() {
                 val response = buildBlockedResponse(dns, qtype)
                 writePacket(srcIp, srcPort, response)
             } else {
-                val response = forwardDns(dns) ?: return
+                // v1.0.4 FAIL OPEN: track upstream health. A successful
+                // forward resets the counter; consecutive failures trip
+                // failOpen() so the phone never sits on broken DNS.
+                val response = forwardDns(dns)
+                if (response == null) {
+                    val failures = synchronized(failOpenLock) {
+                        consecutiveForwardFailures += 1
+                        consecutiveForwardFailures
+                    }
+                    if (failures >= MAX_CONSECUTIVE_FORWARD_FAILURES) {
+                        failOpen()
+                    }
+                    return
+                }
+                synchronized(failOpenLock) { consecutiveForwardFailures = 0 }
                 writePacket(srcIp, srcPort, response)
             }
         } catch (e: Exception) {
@@ -274,10 +365,13 @@ class AdBlockVpnService : VpnService() {
 
     /** Send the raw DNS query to an upstream resolver and return its answer. */
     private fun forwardDns(query: ByteArray): ByteArray? {
+        // v1.0.4: short timeout (~2.5s) per upstream; try 1.1.1.1 first,
+        // fall back to 8.8.8.8. A null return counts as one failed
+        // forward for the fail-open counter (see handlePacket).
         for (upstream in listOf(UPSTREAM_1, UPSTREAM_2)) {
             try {
                 DatagramSocket().use { socket ->
-                    socket.soTimeout = 3000
+                    socket.soTimeout = 2500
                     val addr = InetAddress.getByName(upstream)
                     socket.send(DatagramPacket(query, query.size, addr, DNS_PORT))
                     val buf = ByteArray(4096)

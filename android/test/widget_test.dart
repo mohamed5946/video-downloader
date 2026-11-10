@@ -83,10 +83,26 @@ void main() {
     await tester.tap(find.text('الإعدادات').first);
     await tester.pumpAndSettle();
 
-    // Appearance: the single approved theme.
+    // Appearance: three working theme options (Light / Night / System)
+    // and tapping one applies it immediately.
     await tester.tap(find.text('المظهر'));
     await tester.pumpAndSettle();
-    expect(find.text('أزرق رمادي + أبيض دافئ'), findsOneWidget);
+    expect(find.text('فاتح'), findsOneWidget);
+    expect(find.text('ليلي'), findsOneWidget);
+    expect(find.text('تلقائي'), findsOneWidget);
+    await tester.tap(find.text('ليلي'));
+    await tester.pumpAndSettle();
+    await _goBack(tester);
+    await tester.pumpAndSettle();
+
+    // Speed test: the row opens its screen, which never auto-runs —
+    // it waits for the start button.
+    await tester.ensureVisible(find.text('سرعة الإنترنت'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('سرعة الإنترنت'));
+    await tester.pumpAndSettle();
+    expect(find.text('ابدأ القياس'), findsOneWidget);
+    expect(find.text('التحميل'), findsWidgets);
     await _goBack(tester);
     await tester.pumpAndSettle();
 

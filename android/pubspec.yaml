@@ -1,7 +1,7 @@
 name: snapdl
 description: "SnapDL — liquid-glass video downloader (yt-dlp engine) for Android."
 publish_to: "none"
-version: 1.0.3+2004
+version: 1.0.4+2005
 
 environment:
   sdk: ^3.5.0

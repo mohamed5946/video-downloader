@@ -118,6 +118,10 @@ void main() {
 
   testWidgets('preview: about', (tester) async {
     await pumpPreview(tester, 'settings');
+    // The About row sits below the fold once the list grew — bring it
+    // into view first, or the tap lands on the bottom nav instead.
+    await tester.ensureVisible(find.text('عن التطبيق'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('عن التطبيق'));
     await tester.pumpAndSettle();
     await expectLater(

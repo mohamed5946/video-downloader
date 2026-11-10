@@ -27,6 +27,13 @@ class AdBlockService extends ChangeNotifier {
   bool supported = true;
   bool _handlerSet = false;
 
+  // v1.0.4: while the blocker is on, re-check status every few seconds
+  // so the toggle turns off by itself if the service stops on its own
+  // (e.g. the fail-open path when DNS forwarding dies). Never starts
+  // when the service is off — and in widget tests the native channel
+  // is missing, so running stays false and no timer is created.
+  Timer? _pollTimer;
+
   void _ensureHandler() {
     if (_handlerSet) return;
     _handlerSet = true;
@@ -52,6 +59,18 @@ class AdBlockService extends ChangeNotifier {
       running = await _channel.invokeMethod<bool>('isRunning') ?? false;
       blockedCount = await _channel.invokeMethod<int>('blockedCount') ?? 0;
       supported = true;
+      // v1.0.4 FAIL OPEN: if the service stopped itself (DNS forwarding
+      // failed), it leaves the reason here — log it once in the
+      // diagnostics log so the user knows why the blocker turned off.
+      try {
+        final reason =
+            await _channel.invokeMethod<String>('stopReason');
+        if (reason != null && reason.isNotEmpty) {
+          LogService.instance.add(LogCategory.adblock, reason);
+        }
+      } catch (_) {
+        // Older builds have no stopReason method — not fatal.
+      }
     } on MissingPluginException {
       supported = false;
       running = false;
@@ -61,7 +80,19 @@ class AdBlockService extends ChangeNotifier {
       LogService.instance
           .error(LogCategory.adblock, 'Ad blocker status failed', '$e');
     }
+    _updatePollTimer();
     notifyListeners();
+  }
+
+  void _updatePollTimer() {
+    if (running) {
+      _pollTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+        if (running) refresh();
+      });
+    } else {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+    }
   }
 
   /// Returns true if the service started now, false if the user still

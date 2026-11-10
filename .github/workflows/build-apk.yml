@@ -44,6 +44,14 @@ jobs:
           ls -la android/android/release.keystore
 
       - name: Build release APK
+        # v1.0.4: --no-shrink. Flutter's release build enables R8 code
+        # shrinking/obfuscation by default, and R8 stripped a class the
+        # download service needs at runtime (v1.0.3 field log:
+        # NoClassDefFoundError "vr" — the obfuscated name of the missing
+        # class; the dex contained zero occurrences of "YoutubeDL").
+        # The APK is 178 MB of native engine anyway; shrinking saves
+        # nothing worth this risk. Also disabled explicitly in
+        # build.gradle.kts and guarded by proguard-rules.pro.
         # v1.0.2: UNIVERSAL APK again (all ABIs). v1.0.1 was an
         # arm64-only split APK and failed to install on the user's phone
         # ("package appears to be invalid") even after uninstalling
@@ -53,7 +61,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        run: cd android && flutter build apk --release
+        run: cd android && flutter build apk --release --no-shrink
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -65,7 +65,7 @@ class _AboutScreenState extends State<AboutScreen> {
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(SettingsService.instance.tr('common_later'),
-                  style: TextStyle(color: AppColors.textSecondary)),
+                  style: TextStyle(color: AppColors.textSecondaryOf(context))),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -116,7 +116,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 Text(
                   'SnapDL',
                   style: TextStyle(
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimaryOf(context),
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
                   ),
@@ -125,13 +125,13 @@ class _AboutScreenState extends State<AboutScreen> {
                 Text(
                   SettingsService.instance.trf('about_version', {'v': _version}),
                   style: TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13),
+                      color: AppColors.textSecondaryOf(context), fontSize: 13),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   SettingsService.instance.tr('about_tagline'),
                   style: TextStyle(
-                      color: AppColors.textFaint, fontSize: 13),
+                      color: AppColors.textFaintOf(context), fontSize: 13),
                 ),
                 const SizedBox(height: 18),
                 SizedBox(
@@ -153,11 +153,11 @@ class _AboutScreenState extends State<AboutScreen> {
                 children: [
                   _InfoRow(
                     label: SettingsService.instance.tr('about_developer'), value: 'Mohamed El Sayed'),
-                Divider(color: AppColors.glassBorder, height: 20),
+                Divider(color: AppColors.glassBorderOf(context), height: 20),
                 _InfoRow(
                     label: SettingsService.instance.tr('about_platforms'),
                     value: 'YouTube · TikTok · Instagram · Facebook · X'),
-                Divider(color: AppColors.glassBorder, height: 20),
+                Divider(color: AppColors.glassBorderOf(context), height: 20),
                 _InfoRow(
                     label: SettingsService.instance.tr('about_storage'),
                     value: 'Downloads / SnapDL'),
@@ -183,7 +183,7 @@ class _AboutScreenState extends State<AboutScreen> {
             child: Text(
               SettingsService.instance.tr('about_disclaimer'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textFaint, fontSize: 12),
+            style: TextStyle(color: AppColors.textFaintOf(context), fontSize: 12),
           )),
         ],
         ),
@@ -207,13 +207,13 @@ class _InfoRow extends StatelessWidget {
           width: 110,
           child: Text(label,
               style: TextStyle(
-                  color: AppColors.textFaint, fontSize: 13)),
+                  color: AppColors.textFaintOf(context), fontSize: 13)),
         ),
         Expanded(
           child: Text(
             value,
             style: TextStyle(
-                color: AppColors.textPrimary, fontSize: 13),
+                color: AppColors.textPrimaryOf(context), fontSize: 13),
           ),
         ),
       ],

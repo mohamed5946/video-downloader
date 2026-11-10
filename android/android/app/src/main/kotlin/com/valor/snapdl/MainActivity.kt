@@ -53,26 +53,51 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == VPN_REQUEST_CODE) {
-            if (resultCode == RESULT_OK) {
-                startAdBlockService()
-                adblockChannel?.invokeMethod(
-                    "vpnConsentResult", mapOf("granted" to true)
-                )
-            } else {
+        // v1.0.4: never let the consent result crash the app.
+        try {
+            if (requestCode == VPN_REQUEST_CODE) {
+                if (resultCode == RESULT_OK) {
+                    startAdBlockService()
+                    adblockChannel?.invokeMethod(
+                        "vpnConsentResult", mapOf("granted" to true)
+                    )
+                } else {
+                    adblockChannel?.invokeMethod(
+                        "vpnConsentResult", mapOf("granted" to false)
+                    )
+                }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e(
+                "SnapDL-AdBlock",
+                "VPN consent result failed: ${t.javaClass.simpleName}: ${t.message}"
+            )
+            try {
                 adblockChannel?.invokeMethod(
                     "vpnConsentResult", mapOf("granted" to false)
                 )
-            }
+            } catch (_: Throwable) {}
         }
     }
 
-    private fun startAdBlockService() {
-        val intent = Intent(this, AdBlockVpnService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+    // v1.0.4: starting the VPN service must return success/failure to the
+    // caller instead of throwing (a throw here used to kill the app with
+    // "SnapDL has stopped" right after the VPN icon appeared).
+    private fun startAdBlockService(): Boolean {
+        return try {
+            val intent = Intent(this, AdBlockVpnService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            true
+        } catch (t: Throwable) {
+            android.util.Log.e(
+                "SnapDL-AdBlock",
+                "Could not start ad blocker service: ${t.javaClass.simpleName}: ${t.message}"
+            )
+            false
         }
     }
 
@@ -82,7 +107,29 @@ class MainActivity : FlutterActivity() {
 
         adblockChannel = MethodChannel(messenger, "com.valor.snapdl/adblock")
         adblockChannel?.setMethodCallHandler { call, result ->
-            when (call.method) {
+            // v1.0.4: every adblock call is guarded — a native failure
+            // answers the Dart side with an error instead of crashing.
+            try {
+                handleAdblockCall(call, result)
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    "SnapDL-AdBlock",
+                    "Adblock call ${call.method} failed: ${t.javaClass.simpleName}: ${t.message}"
+                )
+                try {
+                    result.error("ADBLOCK", t.message, null)
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    // v1.0.4: the actual adblock calls, invoked through the guarded
+    // wrapper above — a failure here answers Dart with an error.
+    private fun handleAdblockCall(
+        call: MethodChannel.MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        when (call.method) {
                 "isRunning" -> result.success(AdBlockVpnService.isRunning)
                 "blockedCount" -> result.success(AdBlockVpnService.blockedCount.get())
                 "prepare" -> {
@@ -104,12 +151,36 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "start" -> {
-                    startAdBlockService()
-                    result.success(true)
+                    if (startAdBlockService()) {
+                        result.success(true)
+                    } else {
+                        result.error(
+                            "ADBLOCK_START",
+                            "Could not start the ad blocker service",
+                            null
+                        )
+                    }
                 }
                 "stop" -> {
                     stopService(Intent(this, AdBlockVpnService::class.java))
                     result.success(true)
+                }
+                // v1.0.4 FAIL OPEN: the service saves its stop reason
+                // (e.g. "Ad blocker stopped: DNS forwarding failed")
+                // here when it stops itself; Dart reads it once and
+                // logs it in the diagnostics log.
+                "stopReason" -> {
+                    val prefs = getSharedPreferences(
+                        AdBlockVpnService.PREFS, MODE_PRIVATE
+                    )
+                    val reason =
+                        prefs.getString(AdBlockVpnService.KEY_STOP_REASON, null)
+                    if (reason != null) {
+                        prefs.edit()
+                            .remove(AdBlockVpnService.KEY_STOP_REASON)
+                            .apply()
+                    }
+                    result.success(reason)
                 }
                 "updateBlocklist" -> {
                     Thread { updateBlocklist(result) }.start()
@@ -126,7 +197,7 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
-        }
+    }
 
         EventChannel(messenger, "com.valor.snapdl/engine_events")
             .setStreamHandler(object : EventChannel.StreamHandler {

@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../widgets/staggered_entrance.dart';
 import 'about_screen.dart';
 import 'logs_screen.dart';
+import 'speed_test_screen.dart';
 
 /// Settings — a clean list of buttons (DeliveryFlow style). Every row
 /// opens its own dedicated sub-screen; nothing is jumbled together.
@@ -33,7 +34,7 @@ class SettingsScreen extends StatelessWidget {
               Text(
                 settings.tr('settings_title'),
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: AppColors.textPrimaryOf(context),
                   fontSize: 26,
                   fontWeight: FontWeight.w700,
                 ),
@@ -99,6 +100,17 @@ class SettingsScreen extends StatelessWidget {
               StaggeredItem(
                 index: 5,
                 child: _SettingsRow(
+                icon: Icons.speed_rounded,
+                title: settings.tr('settings_speedtest'),
+                subtitle: settings.tr('settings_speedtest_sub'),
+                onTap: () => _push(context, settings.tr('speedtest_title'),
+                    const SpeedTestScreen()),
+
+                ),
+              ),
+              StaggeredItem(
+                index: 6,
+                child: _SettingsRow(
                 icon: Icons.terminal_rounded,
                 title: 'سجل التشخيص',
                 subtitle: settings.tr('settings_logs_sub'),
@@ -109,7 +121,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               StaggeredItem(
-                index: 6,
+                index: 7,
                 child: _SettingsRow(
                 icon: Icons.info_outline_rounded,
                 title: settings.tr('settings_about'),
@@ -153,11 +165,11 @@ class _SubScreen extends StatelessWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          iconTheme: IconThemeData(color: AppColors.textPrimary),
+          iconTheme: IconThemeData(color: AppColors.textPrimaryOf(context)),
           title: Text(
             title,
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: AppColors.textPrimaryOf(context),
               fontWeight: FontWeight.w700,
               fontSize: 20,
             ),
@@ -212,7 +224,7 @@ class _SettingsRow extends StatelessWidget {
                       Text(
                         title,
                         style: TextStyle(
-                          color: AppColors.textPrimary,
+                          color: AppColors.textPrimaryOf(context),
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
@@ -221,7 +233,7 @@ class _SettingsRow extends StatelessWidget {
                       Text(
                         subtitle,
                         style: TextStyle(
-                            color: AppColors.textFaint, fontSize: 12),
+                            color: AppColors.textFaintOf(context), fontSize: 12),
                       ),
                     ],
                   ),
@@ -230,7 +242,7 @@ class _SettingsRow extends StatelessWidget {
                     Directionality.of(context) == TextDirection.rtl
                         ? Icons.chevron_left_rounded
                         : Icons.chevron_right_rounded,
-                    color: AppColors.textFaint, size: 24),
+                    color: AppColors.textFaintOf(context), size: 24),
               ],
             ),
           ),
@@ -273,7 +285,7 @@ class _OptionRow extends StatelessWidget {
                       Text(
                         title,
                         style: TextStyle(
-                          color: AppColors.textPrimary,
+                          color: AppColors.textPrimaryOf(context),
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
@@ -283,7 +295,7 @@ class _OptionRow extends StatelessWidget {
                         Text(
                           subtitle!,
                           style: TextStyle(
-                              color: AppColors.textFaint, fontSize: 12),
+                              color: AppColors.textFaintOf(context), fontSize: 12),
                         ),
                       ],
                     ],
@@ -300,7 +312,7 @@ class _OptionRow extends StatelessWidget {
                     border: Border.all(
                         color: selected
                             ? Colors.white.withOpacity(0.4)
-                            : AppColors.glassBorder),
+                            : AppColors.glassBorderOf(context)),
                   ),
                   child: selected
                       ? const Icon(Icons.check_rounded,
@@ -344,7 +356,7 @@ class _SwitchRow extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: AppColors.textPrimaryOf(context),
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
@@ -353,7 +365,7 @@ class _SwitchRow extends StatelessWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                        color: AppColors.textFaint, fontSize: 12),
+                        color: AppColors.textFaintOf(context), fontSize: 12),
                   ),
                 ],
               ),
@@ -383,13 +395,13 @@ class _NoteCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.info_outline_rounded,
-              color: AppColors.textFaint, size: 18),
+              color: AppColors.textFaintOf(context), size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                  color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+                  color: AppColors.textSecondaryOf(context), fontSize: 13, height: 1.5),
             ),
           ),
         ],
@@ -410,23 +422,41 @@ Widget _settingsBody({required List<Widget> children}) {
 
 // --------------------------------------------------------------- appearance
 
-// The dark navy/purple palette was dropped entirely (2026-11-10): the app
-// is light blue + light green, so Appearance shows the current theme only.
+// v1.0.4: real theme choice — Light / Night / System, persisted in
+// SettingsService and applied immediately via MaterialApp.themeMode.
 class AppearanceScreen extends StatelessWidget {
   const AppearanceScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
-    return _settingsBody(children: [
-      _OptionRow(
-        title: settings.tr('appearance_theme'),
-        selected: true,
-        onTap: () {},
-      ),
-      const SizedBox(height: 12),
-      _NoteCard(text: settings.tr('appearance_note')),
-    ]);
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) {
+        return _settingsBody(children: [
+          _OptionRow(
+            title: settings.tr('appearance_light'),
+            subtitle: settings.tr('appearance_light_sub'),
+            selected: settings.themeMode == 'light',
+            onTap: () => settings.setThemeMode('light'),
+          ),
+          _OptionRow(
+            title: settings.tr('appearance_dark'),
+            subtitle: settings.tr('appearance_dark_sub'),
+            selected: settings.themeMode == 'dark',
+            onTap: () => settings.setThemeMode('dark'),
+          ),
+          _OptionRow(
+            title: settings.tr('appearance_system'),
+            subtitle: settings.tr('appearance_system_sub'),
+            selected: settings.themeMode == 'system',
+            onTap: () => settings.setThemeMode('system'),
+          ),
+          const SizedBox(height: 12),
+          _NoteCard(text: settings.tr('appearance_note')),
+        ]);
+      },
+    );
   }
 }
 
@@ -484,7 +514,7 @@ class DownloadsScreen extends StatelessWidget {
           Text(
             settings.tr('downloads_folder'),
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: AppColors.textPrimaryOf(context),
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
@@ -504,7 +534,7 @@ class DownloadsScreen extends StatelessWidget {
           Text(
             settings.tr('downloads_quality'),
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: AppColors.textPrimaryOf(context),
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
@@ -525,7 +555,7 @@ class DownloadsScreen extends StatelessWidget {
           Text(
             settings.tr('downloads_max'),
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: AppColors.textPrimaryOf(context),
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
@@ -659,7 +689,7 @@ class _AdBlockerScreenState extends State<AdBlockerScreen>
                             ? settings.tr('adblock_on')
                             : settings.tr('adblock_off'),
                         style: TextStyle(
-                          color: AppColors.textPrimary,
+                          color: AppColors.textPrimaryOf(context),
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
@@ -668,7 +698,7 @@ class _AdBlockerScreenState extends State<AdBlockerScreen>
                       Text(
                         '${settings.tr('adblock_status')}: ${_adblock.running ? settings.tr('adblock_running') : settings.tr('adblock_stopped')}',
                         style: TextStyle(
-                            color: AppColors.textFaint, fontSize: 12),
+                            color: AppColors.textFaintOf(context), fontSize: 12),
                       ),
                     ],
                   ),
@@ -685,14 +715,14 @@ class _AdBlockerScreenState extends State<AdBlockerScreen>
           GlassPanel(
             child: Row(
               children: [
-                const Icon(Icons.block_rounded,
+                Icon(Icons.block_rounded,
                     color: AppColors.success, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     '${settings.tr('adblock_blocked')}: ${_adblock.blockedCount}',
                     style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: AppColors.textPrimaryOf(context),
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                     ),
@@ -794,7 +824,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(SettingsService.instance.tr('common_later'),
-                  style: TextStyle(color: AppColors.textSecondary)),
+                  style: TextStyle(color: AppColors.textSecondaryOf(context))),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -840,13 +870,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                       Text(
                         settings.tr('updates_current'),
                         style: TextStyle(
-                            color: AppColors.textFaint, fontSize: 12),
+                            color: AppColors.textFaintOf(context), fontSize: 12),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'SnapDL $_version',
                         style: TextStyle(
-                          color: AppColors.textPrimary,
+                          color: AppColors.textPrimaryOf(context),
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),

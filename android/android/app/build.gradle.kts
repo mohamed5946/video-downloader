@@ -62,6 +62,18 @@ android {
 
     buildTypes {
         release {
+            // v1.0.4: R8 shrinking/obfuscation OFF, explicitly. The
+            // release build shrinks by default and R8 stripped a class
+            // the download service needs at runtime (v1.0.3 field log:
+            // NoClassDefFoundError "vr"). The workflow also passes
+            // --no-shrink; this is the second lock. proguard-rules.pro
+            // keeps the engine classes if anything ever re-enables it.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = if (rootProject.file("release.keystore").exists()) {
                 signingConfigs.getByName("release")
             } else {

@@ -59,16 +59,16 @@ class _EmptyHistory extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppColors.glassBorder),
+                border: Border.all(color: AppColors.glassBorderOf(context)),
               ),
-              child: const Icon(Icons.history_rounded,
-                  color: AppColors.textFaint, size: 32),
+              child: Icon(Icons.history_rounded,
+                  color: AppColors.textFaintOf(context), size: 32),
             ),
             const SizedBox(height: 16),
             Text(
               settings.tr('hist_empty_title'),
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: AppColors.textPrimaryOf(context),
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
               ),
@@ -77,7 +77,7 @@ class _EmptyHistory extends StatelessWidget {
             Text(
               settings.tr('hist_empty_body'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(color: AppColors.textSecondaryOf(context), fontSize: 13),
             ),
           ],
         ),
@@ -124,8 +124,8 @@ class _HistoryCard extends StatelessWidget {
                       entry.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: AppColors.textPrimaryOf(context),
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                       ),
@@ -133,14 +133,14 @@ class _HistoryCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       '${entry.platform.label} · ${settings.qualityLabel(entry.qualityLabel)} · ${entry.sizeText}',
-                      style: const TextStyle(
-                          color: AppColors.textFaint, fontSize: 12),
+                      style: TextStyle(
+                          color: AppColors.textFaintOf(context), fontSize: 12),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       entry.dateTextFor(settings.language),
-                      style: const TextStyle(
-                          color: AppColors.textFaint, fontSize: 12),
+                      style: TextStyle(
+                          color: AppColors.textFaintOf(context), fontSize: 12),
                     ),
                   ],
                 ),
@@ -198,7 +198,7 @@ class _HistoryCard extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(settings.tr('common_keep'),
-                style: const TextStyle(color: AppColors.textSecondary)),
+                style: TextStyle(color: AppColors.textSecondaryOf(context))),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),

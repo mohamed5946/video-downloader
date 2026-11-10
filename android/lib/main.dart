@@ -110,6 +110,10 @@ class _SnapDLAppState extends State<SnapDLApp> {
           title: 'SnapDL',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
+          // v1.0.4: real night mode — darkTheme + themeMode from the
+          // persisted setting (Light / Night / System).
+          darkTheme: AppTheme.dark(),
+          themeMode: settings.themeModeEnum,
           // Full language switch: Arabic = RTL, English = LTR.
           locale: Locale(settings.language),
           supportedLocales: const [Locale('en'), Locale('ar')],
@@ -146,7 +150,7 @@ class _SnapDLAppState extends State<SnapDLApp> {
                         Text(
                           'SnapDL',
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: AppColors.textPrimaryOf(context),
                             fontWeight: FontWeight.w700,
                             fontSize: 22,
                           ),
@@ -222,9 +226,10 @@ class _BottomNav extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.72),
+              // v1.0.4: dark slate pill on night mode.
+              color: AppColors.navPillOf(context),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.glassBorder),
+              border: Border.all(color: AppColors.glassBorderOf(context)),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF0F2A43).withOpacity(0.14),
@@ -252,7 +257,7 @@ class _BottomNav extends StatelessWidget {
                             size: 22,
                             color: selected
                                 ? AppColors.glowCyan
-                                : AppColors.textFaint,
+                                : AppColors.textFaintOf(context),
                           ),
                           const SizedBox(height: 3),
                           Text(
@@ -263,8 +268,8 @@ class _BottomNav extends StatelessWidget {
                                   ? FontWeight.w700
                                   : FontWeight.w400,
                               color: selected
-                                  ? AppColors.textPrimary
-                                  : AppColors.textFaint,
+                                  ? AppColors.textPrimaryOf(context)
+                                  : AppColors.textFaintOf(context),
                             ),
                           ),
                         ],

@@ -29,6 +29,53 @@ class AppColors {
   static const Color textSecondary = Color(0xFF5A6B76);
   static const Color textFaint = Color(0xFF8A9BA5);
 
+  // ---- Night mode (v1.0.4) — same identity, dark slate surfaces. ----
+  // Backgrounds: deep slate; cards: the #1F2A33 slate itself.
+  static const Color darkBgTop = Color(0xFF141C22);
+  static const Color darkBgMid = Color(0xFF1A242C);
+  static const Color darkBgBottom = Color(0xFF10161B);
+  static const Color darkSurface = Color(0xFF1F2A33);
+  static const Color darkCard = Color(0xFF26343E);
+  static const Color darkTextPrimary = Color(0xFFE9EFF2);
+  static const Color darkTextSecondary = Color(0xFFA9BCC6);
+  static const Color darkTextFaint = Color(0xFF7C93A0);
+  static const Color darkGlassBorder = Color(0xFF33454F);
+  // Primary lightened for contrast on dark surfaces.
+  static const Color darkPrimary = Color(0xFF7BA7B8);
+
+  /// Brightness-aware text colors — use these (not the consts above)
+  /// in widget code so Light / Night both stay readable.
+  static bool isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  static Color textPrimaryOf(BuildContext context) =>
+      isDark(context) ? darkTextPrimary : textPrimary;
+
+  static Color textSecondaryOf(BuildContext context) =>
+      isDark(context) ? darkTextSecondary : textSecondary;
+
+  static Color textFaintOf(BuildContext context) =>
+      isDark(context) ? darkTextFaint : textFaint;
+
+  static Color glassBorderOf(BuildContext context) =>
+      isDark(context) ? darkGlassBorder : glassBorder;
+
+  /// Glass panel fill for the current brightness.
+  static Color panelFillOf(BuildContext context) => isDark(context)
+      ? const Color(0xFF1F2A33).withOpacity(0.82)
+      : Colors.white.withOpacity(0.78);
+
+  /// Circular icon-button fill — 0.70 white in light mode (as before),
+  /// dark slate on night mode.
+  static Color iconFillOf(BuildContext context) => isDark(context)
+      ? const Color(0xFF1F2A33).withOpacity(0.82)
+      : Colors.white.withOpacity(0.7);
+
+  /// Bottom-nav pill fill — 0.72 white in light mode (as before).
+  static Color navPillOf(BuildContext context) => isDark(context)
+      ? const Color(0xFF1F2A33).withOpacity(0.88)
+      : Colors.white.withOpacity(0.72);
+
   // Glass: warm-white panels on the off-white background.
   static const Color glassFill = Color(0xCCFFFFFF);
   static const Color glassBorder = Color(0xFFE0D9C3);
@@ -102,6 +149,58 @@ class AppTheme {
       ),
     );
   }
+
+  /// Night mode (v1.0.4) — same blue-grey identity on dark slate:
+  /// background #141C22 family, surfaces #1F2A33, primary lightened
+  /// to #7BA7B8 where text/accent contrast needs it, light text.
+  static ThemeData dark() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: Colors.transparent,
+      fontFamily: 'Cairo',
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.darkPrimary,
+        secondary: AppColors.primary,
+        surface: AppColors.darkSurface,
+        onSurface: AppColors.darkTextPrimary,
+      ),
+      textTheme: const TextTheme(
+        headlineMedium: TextStyle(
+            color: AppColors.darkTextPrimary,
+            fontWeight: FontWeight.w900,
+            fontSize: 26),
+        titleLarge: TextStyle(
+            color: AppColors.darkTextPrimary,
+            fontWeight: FontWeight.w900,
+            fontSize: 20),
+        titleMedium: TextStyle(
+            color: AppColors.darkTextPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 16),
+        bodyLarge: TextStyle(color: AppColors.darkTextPrimary, fontSize: 15),
+        bodyMedium:
+            TextStyle(color: AppColors.darkTextSecondary, fontSize: 14),
+        bodySmall: TextStyle(color: AppColors.darkTextFaint, fontSize: 12),
+        labelLarge: TextStyle(
+            color: AppColors.darkTextPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 14),
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: Color(0xFF2A3942),
+        contentTextStyle: TextStyle(color: Colors.white),
+        behavior: SnackBarBehavior.floating,
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.darkSurface,
+        titleTextStyle: TextStyle(
+            color: AppColors.darkTextPrimary,
+            fontWeight: FontWeight.w900,
+            fontSize: 18),
+        contentTextStyle: TextStyle(color: AppColors.darkTextSecondary),
+      ),
+    );
+  }
 }
 
 /// Translucent glass panel with blur, soft border and top highlight.
@@ -123,6 +222,8 @@ class GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v1.0.4: dark glass on night mode, warm-white glass on light mode.
+    final bool dark = AppColors.isDark(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
@@ -130,14 +231,20 @@ class GlassPanel extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.78),
+            color: AppColors.panelFillOf(context),
             borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: AppColors.glassBorder, width: 1),
-            gradient: const LinearGradient(
-              colors: [
-                Color(0xD9FFFFFF),
-                Color(0xB3FFFFFF),
-              ],
+            border: Border.all(
+                color: AppColors.glassBorderOf(context), width: 1),
+            gradient: LinearGradient(
+              colors: dark
+                  ? const [
+                      Color(0xD91F2A33),
+                      Color(0xB31F2A33),
+                    ]
+                  : const [
+                      Color(0xD9FFFFFF),
+                      Color(0xB3FFFFFF),
+                    ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -265,11 +372,11 @@ class GlassIconButton extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.7),
-            border: Border.all(color: AppColors.glassBorder),
+            color: AppColors.iconFillOf(context),
+            border: Border.all(color: AppColors.glassBorderOf(context)),
           ),
           child: Icon(icon,
-              size: 20, color: color ?? AppColors.textPrimary),
+              size: 20, color: color ?? AppColors.textPrimaryOf(context)),
         ),
       ),
     );
@@ -293,7 +400,10 @@ class GlassProgressBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(99),
       child: Container(
         height: 12,
-        color: const Color(0xFF1E2A32).withOpacity(0.10),
+        // v1.0.4: light track on night mode, slate track on light mode.
+        color: AppColors.isDark(context)
+            ? Colors.white.withOpacity(0.12)
+            : const Color(0xFF1E2A32).withOpacity(0.10),
         child: LayoutBuilder(
           builder: (context, constraints) {
             return AnimatedContainer(
@@ -321,14 +431,22 @@ class AppBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v1.0.4: dark slate gradient on night mode.
+    final bool dark = AppColors.isDark(context);
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppColors.bgTop,
-            AppColors.bgMid,
-            AppColors.bgBottom,
-          ],
+          colors: dark
+              ? const [
+                  AppColors.darkBgTop,
+                  AppColors.darkBgMid,
+                  AppColors.darkBgBottom,
+                ]
+              : const [
+                  AppColors.bgTop,
+                  AppColors.bgMid,
+                  AppColors.bgBottom,
+                ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),

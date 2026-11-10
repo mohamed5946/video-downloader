@@ -11,6 +11,7 @@ class SettingsService extends ChangeNotifier {
   static final SettingsService instance = SettingsService._();
 
   static const _kLang = 'snapdl_lang'; // en | ar
+  static const _kThemeMode = 'snapdl_theme_mode'; // light | dark | system
   static const _kDefaultQuality = 'snapdl_default_quality';
   static const _kWifiOnly = 'snapdl_wifi_only';
   static const _kMaxSimultaneous = 'snapdl_max_simultaneous';
@@ -18,6 +19,9 @@ class SettingsService extends ChangeNotifier {
   static const _kAutoCheck = 'snapdl_auto_check_updates';
 
   String language = 'ar';
+  // v1.0.4: real theme preference. Default 'light' preserves the
+  // current look; 'dark' is night mode, 'system' follows the device.
+  String themeMode = 'light';
   String defaultQuality = 'Highest';
   bool wifiOnly = false;
   int maxSimultaneous = 1;
@@ -31,6 +35,12 @@ class SettingsService extends ChangeNotifier {
     _loaded = true;
     final prefs = await SharedPreferences.getInstance();
     language = prefs.getString(_kLang) ?? 'ar';
+    themeMode = prefs.getString(_kThemeMode) ?? 'light';
+    if (themeMode != 'light' &&
+        themeMode != 'dark' &&
+        themeMode != 'system') {
+      themeMode = 'light';
+    }
     defaultQuality = prefs.getString(_kDefaultQuality) ?? 'Highest';
     wifiOnly = prefs.getBool(_kWifiOnly) ?? false;
     maxSimultaneous = prefs.getInt(_kMaxSimultaneous) ?? 1;
@@ -42,6 +52,7 @@ class SettingsService extends ChangeNotifier {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kLang, language);
+    await prefs.setString(_kThemeMode, themeMode);
     await prefs.setString(_kDefaultQuality, defaultQuality);
     await prefs.setBool(_kWifiOnly, wifiOnly);
     await prefs.setInt(_kMaxSimultaneous, maxSimultaneous);
@@ -72,6 +83,26 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> setLanguage(String lang) async {
     language = lang;
+    notifyListeners();
+    await _save();
+  }
+
+  /// Flutter ThemeMode for the persisted preference.
+  ThemeMode get themeModeEnum {
+    switch (themeMode) {
+      case 'dark':
+        return ThemeMode.dark;
+      case 'system':
+        return ThemeMode.system;
+      case 'light':
+      default:
+        return ThemeMode.light;
+    }
+  }
+
+  Future<void> setThemeMode(String mode) async {
+    if (mode != 'light' && mode != 'dark' && mode != 'system') return;
+    themeMode = mode;
     notifyListeners();
     await _save();
   }

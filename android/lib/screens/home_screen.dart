@@ -75,8 +75,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               Text(
                 settings.tr('home_title1'),
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: AppColors.textPrimaryOf(context),
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
                   height: 1.15,
@@ -84,8 +84,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Text(
                 settings.tr('home_title2'),
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: AppColors.textPrimaryOf(context),
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
                   height: 1.15,
@@ -94,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               Text(
                 settings.tr('home_subtitle'),
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppColors.textSecondaryOf(context), fontSize: 13),
               ),
               const SizedBox(height: 16),
               GlassPanel(
@@ -107,12 +107,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: TextField(
                             controller: _urlCtrl,
                             onChanged: _onUrlChanged,
-                            style: const TextStyle(
-                                color: AppColors.textPrimary, fontSize: 14),
+                            style: TextStyle(
+                                color: AppColors.textPrimaryOf(context), fontSize: 14),
                             decoration: InputDecoration(
                               hintText: settings.tr('home_hint'),
-                              hintStyle: const TextStyle(
-                                  color: AppColors.textFaint, fontSize: 14),
+                              hintStyle: TextStyle(
+                                  color: AppColors.textFaintOf(context), fontSize: 14),
                               border: InputBorder.none,
                               isDense: true,
                             ),
@@ -152,8 +152,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               c.url,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: AppColors.textFaint, fontSize: 12),
+                              style: TextStyle(
+                                  color: AppColors.textFaintOf(context), fontSize: 12),
                             ),
                           ),
                         ],
@@ -238,8 +238,8 @@ class _SectionTitle extends StatelessWidget {
       title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        color: AppColors.textPrimary,
+      style: TextStyle(
+        color: AppColors.textPrimaryOf(context),
         fontSize: 16,
         fontWeight: FontWeight.w900,
       ),
@@ -339,8 +339,8 @@ class _PreviewLoading extends StatelessWidget {
               children: [
                 Text(
                   settings.tr('card_loading'),
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: AppColors.textPrimaryOf(context),
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -417,8 +417,8 @@ class _PreviewCard extends StatelessWidget {
                           : c.videoTitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: AppColors.textPrimaryOf(context),
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                         height: 1.3,
@@ -615,8 +615,8 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
                 Expanded(
                   child: Text(
                     settings.tr('player_title'),
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: AppColors.textPrimaryOf(context),
                       fontWeight: FontWeight.w900,
                       fontSize: 16,
                     ),
@@ -635,7 +635,7 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
               aspectRatio: 16 / 9,
               child: Container(
                 decoration: BoxDecoration(
-                  color: AppColors.textPrimary,
+                  color: AppColors.textPrimaryOf(context),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -739,7 +739,7 @@ class _QualityPicker extends StatelessWidget {
               border: Border.all(
                 color: selected
                     ? Colors.white.withOpacity(0.35)
-                    : AppColors.glassBorder,
+                    : AppColors.glassBorderOf(context),
               ),
             ),
             child: Column(
@@ -768,7 +768,7 @@ class _QualityPicker extends StatelessWidget {
                         style: TextStyle(
                           color: selected
                               ? Colors.white
-                              : AppColors.textPrimary,
+                              : AppColors.textPrimaryOf(context),
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
@@ -785,7 +785,7 @@ class _QualityPicker extends StatelessWidget {
                     style: TextStyle(
                       color: selected
                           ? Colors.white.withOpacity(0.85)
-                          : AppColors.textFaint,
+                          : AppColors.textFaintOf(context),
                       fontSize: 11,
                     ),
                   ),
@@ -840,8 +840,8 @@ class _DownloadCard extends StatelessWidget {
                   item.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: AppColors.textPrimaryOf(context),
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -880,8 +880,8 @@ class _DownloadCard extends StatelessWidget {
               children: [
                 Text(
                   settings.tr('dl_queued'),
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: AppColors.textPrimaryOf(context),
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
                   ),
@@ -889,8 +889,8 @@ class _DownloadCard extends StatelessWidget {
                 const Spacer(),
                 Text(
                   settings.tr('dl_queued_hint'),
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12),
+                  style: TextStyle(
+                      color: AppColors.textSecondaryOf(context), fontSize: 12),
                 ),
               ],
             ),
@@ -1038,8 +1038,8 @@ class _HintCard extends StatelessWidget {
               children: [
                 Text(
                   settings.tr('home_how'),
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: AppColors.textPrimaryOf(context),
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -1047,8 +1047,8 @@ class _HintCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   settings.tr('home_how_body'),
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12),
+                  style: TextStyle(
+                      color: AppColors.textSecondaryOf(context), fontSize: 12),
                 ),
               ],
             ),
