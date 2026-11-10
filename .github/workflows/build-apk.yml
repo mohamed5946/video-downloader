@@ -34,8 +34,14 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > android/release.keystore
-          ls -la android/release.keystore
+          # v1.0.3 fix: the Gradle root is android/android (where
+          # settings.gradle.kts lives), and build.gradle.kts checks
+          # rootProject.file("release.keystore") there. Decoding to
+          # android/release.keystore (the Flutter project root) meant
+          # the file was never found and every build silently fell back
+          # to debug signing. Decode into the Gradle root instead.
+          echo "$KEYSTORE_BASE64" | base64 -d > android/android/release.keystore
+          ls -la android/android/release.keystore
 
       - name: Build release APK
         # v1.0.2: UNIVERSAL APK again (all ABIs). v1.0.1 was an
