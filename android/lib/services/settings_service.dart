@@ -19,6 +19,11 @@ class SettingsService extends ChangeNotifier {
   static const _kAutoCheck = 'snapdl_auto_check_updates';
   // v1.0.5: last successful download-tool update, epoch ms (0 = never).
   static const _kToolLastCheck = 'snapdl_tool_last_check';
+  // v1.0.7: speed-test unit ('Mbps' | 'MB/s'), tonight-update flag and
+  // the path of a downloaded-but-not-installed update APK.
+  static const _kSpeedUnit = 'snapdl_speed_unit';
+  static const _kUpdateTonight = 'snapdl_update_tonight';
+  static const _kPendingUpdatePath = 'snapdl_pending_update_path';
 
   String language = 'ar';
   // v1.0.4: real theme preference. Default 'light' preserves the
@@ -31,6 +36,12 @@ class SettingsService extends ChangeNotifier {
   bool autoCheckUpdates = true;
   // v1.0.5: 0 = the download tool was never updated.
   int toolLastCheckMs = 0;
+  // v1.0.7: speed-test display unit, default Mbps.
+  String speedUnit = 'Mbps';
+  // v1.0.7: user asked to install the pending update tonight.
+  bool updateTonight = false;
+  // v1.0.7: downloaded update APK waiting for install ('' = none).
+  String pendingUpdatePath = '';
 
   bool _loaded = false;
 
@@ -51,6 +62,10 @@ class SettingsService extends ChangeNotifier {
     downloadLocation = prefs.getString(_kDownloadLocation) ?? 'public';
     autoCheckUpdates = prefs.getBool(_kAutoCheck) ?? true;
     toolLastCheckMs = prefs.getInt(_kToolLastCheck) ?? 0;
+    speedUnit = prefs.getString(_kSpeedUnit) ?? 'Mbps';
+    if (speedUnit != 'Mbps' && speedUnit != 'MB/s') speedUnit = 'Mbps';
+    updateTonight = prefs.getBool(_kUpdateTonight) ?? false;
+    pendingUpdatePath = prefs.getString(_kPendingUpdatePath) ?? '';
     notifyListeners();
   }
 
@@ -64,6 +79,9 @@ class SettingsService extends ChangeNotifier {
     await prefs.setString(_kDownloadLocation, downloadLocation);
     await prefs.setBool(_kAutoCheck, autoCheckUpdates);
     await prefs.setInt(_kToolLastCheck, toolLastCheckMs);
+    await prefs.setString(_kSpeedUnit, speedUnit);
+    await prefs.setBool(_kUpdateTonight, updateTonight);
+    await prefs.setString(_kPendingUpdatePath, pendingUpdatePath);
   }
 
   /// Localised string for [key] in the current language.
@@ -139,6 +157,28 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> setAutoCheckUpdates(bool v) async {
     autoCheckUpdates = v;
+    notifyListeners();
+    await _save();
+  }
+
+  /// v1.0.7: speed-test display unit ('Mbps' | 'MB/s').
+  Future<void> setSpeedUnit(String unit) async {
+    if (unit != 'Mbps' && unit != 'MB/s') return;
+    speedUnit = unit;
+    notifyListeners();
+    await _save();
+  }
+
+  /// v1.0.7: remember the user asked to install the update tonight.
+  Future<void> setUpdateTonight(bool v) async {
+    updateTonight = v;
+    notifyListeners();
+    await _save();
+  }
+
+  /// v1.0.7: remember a downloaded update APK waiting for install.
+  Future<void> setPendingUpdatePath(String path) async {
+    pendingUpdatePath = path;
     notifyListeners();
     await _save();
   }

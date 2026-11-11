@@ -111,6 +111,18 @@ class AppStrings {
           'Could not connect to the internet while checking for updates',
       'update_available_snackbar':
           'SnapDL {v} is available — Settings → Updates.',
+      'updates_update_now': 'Update Now',
+      'updates_update_tonight': 'Update Tonight',
+      'updates_tonight_scheduled':
+          'Update scheduled for tonight — it will install when you open the app later.',
+      'updates_downloading': 'Downloading update…',
+      'updates_install_now': 'Install Now',
+      'updates_install_later_saved':
+          'Update saved — you can install it later from Settings → Updates.',
+      'updates_download_failed':
+          'Update download failed — check your connection and try again.',
+      'updates_size': 'Size: {s}',
+      'updates_features': 'What’s new',
       // v1.0.5: the download tool (the bundled extractor) — generic
       // wording only, never the library name, never a version number.
       'tool_update_title': 'Download tool',
@@ -161,6 +173,10 @@ class AppStrings {
       'speedtest_failed':
           'Measurement failed — check your connection and try again.',
       'speedtest_retry': 'Measure Again',
+      'speedtest_jitter': 'Jitter',
+      'speedtest_unit_mbps': 'Mbps',
+      'speedtest_unit_mbs': 'MB/s',
+      'speedtest_live': 'Live',
       'language_title': 'Language',
       'downloads_title': 'Downloads',
       'downloads_folder': 'Download folder',
@@ -303,6 +319,18 @@ class AppStrings {
           'تعذّر الاتصال بالإنترنت أثناء فحص التحديثات',
       'update_available_snackbar':
           'يتوفر SnapDL {v} — الإعدادات ← التحديثات.',
+      'updates_update_now': 'التحديث الآن',
+      'updates_update_tonight': 'التحديث الليلة',
+      'updates_tonight_scheduled':
+          'تمت جدولة التحديث لليلة — هيتثبّت لما تفتح التطبيق بعدين.',
+      'updates_downloading': 'جارٍ تنزيل التحديث…',
+      'updates_install_now': 'التثبيت الآن',
+      'updates_install_later_saved':
+          'تم حفظ التحديث — تقدر تثبّته بعدين من الإعدادات ← التحديثات.',
+      'updates_download_failed':
+          'فشل تنزيل التحديث — اتأكد من الاتصال وحاول تاني.',
+      'updates_size': 'الحجم: {s}',
+      'updates_features': 'إيه الجديد',
       // v1.0.5: أداة التحميل — صياغة عامة فقط، بدون اسم المكتبة أو رقم إصدار.
       'tool_update_title': 'أداة التحميل',
       'tool_update_body':
@@ -352,6 +380,10 @@ class AppStrings {
       'speedtest_failed':
           'القياس فشل — اتأكد من الاتصال وحاول تاني.',
       'speedtest_retry': 'قيس تاني',
+      'speedtest_jitter': 'التذبذب',
+      'speedtest_unit_mbps': 'Mbps',
+      'speedtest_unit_mbs': 'MB/s',
+      'speedtest_live': 'مباشر',
       'language_title': 'اللغة',
       'downloads_title': 'التحميلات',
       'downloads_folder': 'مجلد التحميل',
