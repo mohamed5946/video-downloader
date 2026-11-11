@@ -195,6 +195,13 @@ class MainActivity : FlutterActivity() {
                         val path = call.argument<String>("path") ?: ""
                         result.success(openFile(path))
                     }
+                    // v1.0.7: install a downloaded update APK via the
+                    // system installer (user consent in the installer
+                    // UI — no silent install, no new permission).
+                    "installUpdate" -> {
+                        val path = call.argument<String>("path") ?: ""
+                        result.success(installUpdate(path))
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -882,6 +889,35 @@ class MainActivity : FlutterActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(intent, "Open with"))
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    // v1.0.7: hand a downloaded update APK to the system installer.
+    // Same FileProvider authority pattern as openFile. The installer
+    // UI asks the user for consent — this is NOT a silent install,
+    // so REQUEST_INSTALL_PACKAGES is not needed and no new permission
+    // was added to the manifest.
+    private fun installUpdate(path: String): Boolean {
+        return try {
+            val file = File(path)
+            if (!file.exists()) return false
+            val uri: Uri = FileProvider.getUriForFile(
+                this,
+                "${applicationContext.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(
+                    uri,
+                    "application/vnd.android.package-archive"
+                )
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
             true
         } catch (e: Exception) {
             false
