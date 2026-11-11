@@ -38,7 +38,7 @@ void main() {
 
     test('monotonic across the dial marks 0, 5, 10, 50, 100, 250, 500, 750, 1000',
         () {
-      const marks = [0.0, 5, 10, 50, 100, 250, 500, 750, 1000];
+      const marks = <double>[0.0, 5, 10, 50, 100, 250, 500, 750, 1000];
       var prev = -1.0;
       for (final m in marks) {
         final f = SpeedTestService.gaugeFraction(m);
