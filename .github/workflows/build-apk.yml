@@ -69,3 +69,10 @@ jobs:
           name: snapdl-release-apk
           path: android/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Analyze and test
+        # v1.0.7: per the owner's instruction, the build runs first and
+        # the APK is uploaded, and only then do analysis and tests run.
+        # A failing test still fails the job, and its results are
+        # reported and fixed afterwards — it just never blocks the build.
+        run: cd android && flutter analyze && flutter test
