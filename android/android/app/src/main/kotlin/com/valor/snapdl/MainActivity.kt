@@ -528,19 +528,20 @@ class MainActivity : FlutterActivity() {
         val lastLineAt = java.util.concurrent.atomic.AtomicLong(
             System.currentTimeMillis()
         )
-        @Volatile
-        var finished = false
+        // AtomicBoolean, not @Volatile: @Volatile is only legal on a
+        // class field, not a local variable (CI failed on this).
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
         val watchdogCancelled = java.util.Collections.synchronizedSet(
             mutableSetOf<String>()
         )
         val watchdog = Thread {
-            while (!finished) {
+            while (!finished.get()) {
                 try {
                     Thread.sleep(10_000)
                 } catch (_: InterruptedException) {
                     break
                 }
-                if (finished) break
+                if (finished.get()) break
                 if (System.currentTimeMillis() - lastLineAt.get() >
                     WATCHDOG_SILENCE_MS
                 ) {
@@ -596,7 +597,7 @@ class MainActivity : FlutterActivity() {
                     postProgress(id, progress, eta, line, tracker)
                 }
             )
-            finished = true
+            finished.set(true)
             val filePath = findOutputFile(response.out)
             val size = filePath?.let { File(it).let { f -> if (f.exists()) f.length() else 0L } } ?: 0L
             // v1.0.6: tell the system about the new file right away so
@@ -621,7 +622,7 @@ class MainActivity : FlutterActivity() {
             ))
             mainHandler.post { result.success(true) }
         } catch (e: YoutubeDL.CanceledException) {
-            finished = true
+            finished.set(true)
             if (watchdogCancelled.contains(id)) {
                 // Killed by the silence watchdog, not by the user —
                 // report an error so the card does not stay "paused".
@@ -637,7 +638,7 @@ class MainActivity : FlutterActivity() {
                 mainHandler.post { result.success(false) }
             }
         } catch (e: Exception) {
-            finished = true
+            finished.set(true)
             // v1.0.5: sanitize — the raw message can carry extractor
             // naming; the Dart side shows a generic message for it.
             postEvent(mapOf(
@@ -647,7 +648,7 @@ class MainActivity : FlutterActivity() {
             ))
             mainHandler.post { result.success(false) }
         } finally {
-            finished = true
+            finished.set(true)
         }
     }
 
