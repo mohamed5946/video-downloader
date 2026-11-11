@@ -9,9 +9,16 @@ const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
 const http = require('http');
+const crypto = require('crypto');
+const os = require('os');
 
 const APP_NAME = 'SnapDL';
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.7';
+// Bundled download-tool version (yt-dlp.exe shipped / fetched by scripts/fetch-ytdlp.js).
+const BUNDLED_YTDLP_VERSION = '2026.10.26';
+const YTDLP_LATEST_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe';
+const YTDLP_RELEASES_API_URL = 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest';
+const YTDLP_SUMS_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS';
 const UPDATE_MANIFEST_URL = 'https://github.com/mohamed5946/video-downloader/releases/latest/download/update.json';
 const RELEASES_URL = 'https://github.com/mohamed5946/video-downloader/releases/latest';
 const PORTFOLIO_URL = 'https://mohamed5946.github.io/portfolio/';
@@ -115,7 +122,11 @@ const DEFAULT_SETTINGS = {
   autoCheck: false,
   downloadDir: null,
   extLastSeen: 0,
-  extVersion: ''
+  extVersion: '',
+  toolLastCheckMs: 0,   // epoch ms of the last successful yt-dlp check; 0 = never updated
+  speedUnit: 'Mbps',    // Mbps | MB/s (MB/s = Mbps / 8)
+  updateTonight: false, // renderer shows 'Update Tonight'; overnight install is out of scope
+  pendingUpdatePath: '' // path of the last update package downloaded in-app
 };
 function loadSettings() {
   let s = {};
@@ -167,6 +178,155 @@ function ffmpegDir() {
   const ff = resolveBin('ffmpeg.exe');
   return ff ? path.dirname(ff) : null;
 }
+// ---------------------------------------------------------------- download tool (yt-dlp) updates
+// Mirrors Android v1.0.5/v1.0.6 (EngineService.updateTool): first run ever,
+// then at most once a week, plus one retry when a fetch fails. A failed
+// update never breaks downloads — the bundled yt-dlp.exe keeps working.
+function isUpdateDue(lastCheckMs) {
+  if (!lastCheckMs) return true;
+  return Date.now() - lastCheckMs > 7 * 24 * 60 * 60 * 1000;
+}
+function getToolVersion() {
+  const exe = ytdlpPath();
+  if (!exe) return Promise.resolve('');
+  return new Promise(resolve => {
+    execFile(exe, ['--version'], { timeout: 15000, windowsHide: true }, (err, stdout) => {
+      if (err) return resolve('');
+      resolve(String(stdout || '').trim());
+    });
+  });
+}
+function downloadToFile(url, destPath, timeoutMs, headers) {
+  return (async () => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, redirect: 'follow', headers: headers || {} });
+      if (!res.ok) throw new Error(`Server answered HTTP ${res.status}`);
+      const stream = fs.createWriteStream(destPath);
+      const reader = res.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        stream.write(Buffer.from(value));
+      }
+      await new Promise((resolve, reject) => { stream.end(err => err ? reject(err) : resolve()); });
+    } finally { clearTimeout(timer); }
+  })();
+}
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', d => hash.update(d));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+// First writable directory that can hold yt-dlp.exe: prefer the exe dir
+// when packaged, else windows/bin/ (next to main.js).
+function toolInstallDir() {
+  const candidates = [];
+  if (app.isPackaged) candidates.push(exeDir());
+  const existing = ytdlpPath();
+  if (existing) candidates.push(path.dirname(existing));
+  candidates.push(path.join(__dirname, 'bin'));
+  if (!app.isPackaged) candidates.push(exeDir());
+  const seen = new Set();
+  for (const dir of candidates) {
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.accessSync(dir, fs.constants.W_OK);
+      return dir;
+    } catch (_) { /* try the next candidate */ }
+  }
+  return path.join(__dirname, 'bin');
+}
+let toolUpdateRunning = null;
+function updateTool() {
+  if (toolUpdateRunning) return toolUpdateRunning;
+  toolUpdateRunning = updateToolImpl();
+  return toolUpdateRunning.finally(() => { toolUpdateRunning = null; });
+}
+async function updateToolImpl() {
+  const overall = new AbortController();
+  const overallTimer = setTimeout(() => overall.abort(), 90000); // max ~90s, like Android
+  try {
+    // Latest tag, e.g. '2026.10.26'.
+    let latestTag = '';
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(YTDLP_RELEASES_API_URL, { signal: ctrl.signal, headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'SnapDL' } });
+      clearTimeout(t);
+      if (!res.ok) throw new Error(`Server answered HTTP ${res.status}`);
+      const rel = await res.json();
+      latestTag = String(rel.tag_name || '').trim();
+    } catch (e) {
+      log('UPDATE', 'Download-tool update failed: could not check the latest version (' + scrubEngineWords(e.message) + ')', 'error');
+      return { status: 'failed', error: 'Could not check the latest tool version.' };
+    }
+    if (!latestTag) return { status: 'failed', error: 'Could not check the latest tool version.' };
+    const current = await getToolVersion();
+    if (current && current === latestTag) {
+      const st = loadSettings(); st.toolLastCheckMs = Date.now(); saveSettings(st);
+      log('UPDATE', 'Download tool already up to date (' + latestTag + ').');
+      return { status: 'up_to_date', version: current };
+    }
+    const dir = toolInstallDir();
+    const tmpPath = path.join(dir, '.yt-dlp.exe.tmp-' + process.pid);
+    const targetPath = path.join(dir, 'yt-dlp.exe');
+    try {
+      await downloadToFile(YTDLP_LATEST_URL, tmpPath, 90000);
+      // Verify SHA-256 against the release's SHA2-256SUMS.
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 15000);
+      const sumsRes = await fetch(YTDLP_SUMS_URL, { signal: ctrl.signal, redirect: 'follow' });
+      clearTimeout(t);
+      if (!sumsRes.ok) throw new Error(`Server answered HTTP ${sumsRes.status}`);
+      const sumsText = await sumsRes.text();
+      let expected = '';
+      for (const line of sumsText.split(/\r?\n/)) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2 && parts[1].replace(/^\*/, '') === 'yt-dlp.exe') { expected = parts[0].toLowerCase(); break; }
+      }
+      if (!expected) throw new Error('Checksum not found for yt-dlp.exe');
+      const actual = await sha256File(tmpPath);
+      if (actual !== expected) throw new Error('Checksum mismatch');
+      // Atomic replace (same directory, so rename is atomic).
+      fs.renameSync(tmpPath, targetPath);
+    } catch (e) {
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+      log('UPDATE', 'Download-tool update failed: ' + scrubEngineWords(e.message), 'error');
+      return { status: 'failed', error: 'Download-tool update failed.' };
+    }
+    const st = loadSettings(); st.toolLastCheckMs = Date.now(); saveSettings(st);
+    log('UPDATE', 'Download tool updated to ' + latestTag + '.');
+    return { status: 'done', version: latestTag };
+  } finally { clearTimeout(overallTimer); }
+}
+// First-run behaviour (Android v1.0.6): if the tool was never updated,
+// await updateTool() (max ~90s) before the first fetch / download; on
+// failure fall back to the bundled yt-dlp.exe and never block the user.
+// On later runs, the weekly check runs fire-and-forget in the background.
+let toolReadyPromise = null;
+async function ensureToolReady() {
+  if (toolReadyPromise) return toolReadyPromise;
+  toolReadyPromise = (async () => {
+    try {
+      const s = loadSettings();
+      if (!s.toolLastCheckMs) {
+        await updateTool();
+      } else if (isUpdateDue(s.toolLastCheckMs)) {
+        updateTool().catch(() => {}); // weekly background check — never blocks
+      }
+    } catch (_) { /* fall back to the bundled tool */ }
+  })();
+  try { await toolReadyPromise; } finally { toolReadyPromise = null; }
+}
+
 function humanSize(bytes) {
   if (bytes == null || isNaN(bytes)) return '—';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -252,7 +412,12 @@ function finishJob(job) {
 }
 
 // Strip internal tool names from any text shown to the user (log viewer / toasts).
-function scrubEngineWords(s) { return String(s || '').replace(/yt-dlp/gi, '').replace(/ffmpeg/gi, ''); }
+function scrubEngineWords(s) {
+  let out = String(s || '').replace(/https?:\/\/\S+/gi, '');
+  out = out.replace(/yt-dlp|ytdlp|youtube-dl|youtubedl|libffmpeg|ffmpeg|engine/gi, '');
+  out = out.replace(/\s+/g, ' ').trim();
+  return out.length > 300 ? out.slice(0, 300) : out;
+}
 
 function spawnDownload(job) {
   const exe = ytdlpPath();
@@ -269,18 +434,35 @@ function spawnDownload(job) {
   const child = spawn(exe, args, { windowsHide: true });
   job.child = child;
   job.status = 'downloading';
-  job.progress = job.progress || 0;
+  // True resume (Android v1.0.6): keep the previous attempt's progress —
+  // never reset to 0 — and floor reported percentages at the seeded value
+  // derived from the .part file size when the previous progress is unknown.
+  job._startedAt = Date.now();
+  job._lastActivity = Date.now();
+  job._watchdogResolved = false;
+  let floor = job.progress || 0;
+  if (!floor) {
+    const parts = findPartFile(job);
+    let partBytes = 0;
+    for (const pf of parts) { try { partBytes += fs.statSync(pf).size; } catch (_) {} }
+    const totalBytes = parseHumanSize(job.sizeTotal);
+    if (partBytes > 0 && totalBytes > 0) floor = Math.min(99, (partBytes / totalBytes) * 100);
+  }
+  job._progressFloor = floor;
+  job.progress = floor;
   job.speed = ''; job.eta = '';
+  ensureWatchdog();
   sendJobList();
 
   let stderrBuf = '';
   child.stdout.on('data', d => {
+    job._lastActivity = Date.now();
     const text = d.toString();
     for (const line of text.split(/\r?\n/)) {
       if (!line) continue;
       const m = line.match(/\[download\]\s+(\d+(?:\.\d+)?)% of\s+([\d.]+\s*\w+)\s+at\s+([\d.]+\s*\w+\/s)\s+ETA\s+([\d:]+)/);
       if (m) {
-        job.progress = parseFloat(m[1]);
+        job.progress = Math.max(job._progressFloor || 0, parseFloat(m[1]));
         job.sizeTotal = m[2].trim();
         job.speed = m[3].trim();
         job.eta = m[4].trim();
@@ -308,6 +490,7 @@ function spawnDownload(job) {
   child.on('close', (code, signal) => {
     job.child = null;
     if (job.status === 'paused' || job.status === 'cancelled') return; // handled by pause/cancel
+    if (job._watchdogResolved) return; // watchdog already completed / failed this job
     if (code === 0) {
       job.status = 'done'; job.progress = 100; job.speed = ''; job.eta = '';
       let size = null;
@@ -326,6 +509,84 @@ function spawnDownload(job) {
     sendJobList();
     finishJob(job);
   });
+}
+
+function parseHumanSize(str) {
+  const m = String(str || '').trim().match(/^([\d.]+)\s*(B|KB|KiB|MB|MiB|GB|GiB|TB|TiB)$/i);
+  if (!m) return 0;
+  const mult = { b: 1, kb: 1000, kib: 1024, mb: 1e6, mib: 1024 * 1024, gb: 1e9, gib: 1024 ** 3, tb: 1e12, tib: 1024 ** 4 };
+  return parseFloat(m[1]) * (mult[m[2].toLowerCase()] || 1);
+}
+// Newest finished file for a job: job.outFile if it exists and is
+// non-empty, else the newest non-.part file in job.outDir newer than
+// the job started (mirrors Android pickFinishedFile).
+function findFinishedFile(job) {
+  if (job.outFile) {
+    try { const st = fs.statSync(job.outFile); if (st.size > 0) return job.outFile; } catch (_) {}
+  }
+  try {
+    let best = null, bestTime = 0;
+    for (const f of fs.readdirSync(job.outDir)) {
+      if (f.endsWith('.part') || f.endsWith('.part-Frag')) continue;
+      const full = path.join(job.outDir, f);
+      let st; try { st = fs.statSync(full); } catch (_) { continue; }
+      if (!st.isFile() || st.size <= 0) continue;
+      if (job._startedAt && st.mtimeMs < job._startedAt) continue;
+      if (st.mtimeMs > bestTime) { best = full; bestTime = st.mtimeMs; }
+    }
+    return best;
+  } catch (_) { return null; }
+}
+function completeJob(job, filePath) {
+  job.status = 'done'; job.progress = 100; job.speed = ''; job.eta = '';
+  if (filePath) job.outFile = filePath;
+  let size = null;
+  if (job.outFile) { try { size = fs.statSync(job.outFile).size; } catch (_) {} }
+  log('DOWNLOAD', `Finished: ${job.title || job.url} (${humanSize(size)})`);
+  addHistory({
+    id: job.id, title: job.title || job.url, platform: job.platform || 'Video',
+    quality: job.quality,
+    url: job.url, path: job.outFile || '', size, date: new Date().toISOString(), status: 'done'
+  });
+  sendJobList();
+  finishJob(job);
+}
+// Completion watchdog (Android v1.0.6): one 5s interval for all jobs.
+// At 100% with no output for 15s, verify the finished file and complete
+// the job; silent for 5 minutes at any progress, fail it as stalled.
+let watchdogTimer = null;
+function ensureWatchdog() {
+  if (watchdogTimer) return;
+  watchdogTimer = setInterval(() => {
+    const now = Date.now();
+    let anyDownloading = false;
+    for (const job of [...jobs.values()]) {
+      if (job.status !== 'downloading' && job.status !== 'starting') continue;
+      anyDownloading = true;
+      const last = job._lastActivity || job._startedAt || now;
+      const silentMs = now - last;
+      if ((job.progress || 0) >= 100 && silentMs > 15000) {
+        const found = findFinishedFile(job);
+        if (found) {
+          job._watchdogResolved = true;
+          if (job.child) { const c = job.child; job.child = null; killChild(c); }
+          log('DOWNLOAD', `Finished (recovered without a done signal): ${job.title || job.url}`);
+          completeJob(job, found);
+        }
+      } else if (silentMs > 5 * 60 * 1000) {
+        job._watchdogResolved = true;
+        if (job.child) { const c = job.child; job.child = null; killChild(c); }
+        if (job._controller) { try { job._controller.abort(); } catch (_) {} }
+        job.status = 'error';
+        job.error = scrubEngineWords('Download stalled with no progress for 5 minutes.');
+        log('DOWNLOAD', `Download stalled with no progress for 5 minutes (${job.url})`, 'error');
+        sendJobList();
+        finishJob(job);
+      }
+    }
+    if (!anyDownloading) { clearInterval(watchdogTimer); watchdogTimer = null; }
+  }, 5000);
+  if (watchdogTimer.unref) watchdogTimer.unref();
 }
 
 function findPartFile(job) {
@@ -357,8 +618,12 @@ async function runFileDownload(job) {
   job._controller = ctrl;
   job.status = 'downloading';
   job.phase = 'downloading';
-  job.progress = 0; job.speed = ''; job.eta = '';
+  // True resume: seed progress from bytes already on disk; never go backwards.
+  job._startedAt = Date.now();
+  job._lastActivity = Date.now();
+  job._progressFloor = 0; job.speed = ''; job.eta = '';
   log('DOWNLOAD', `Starting file download: ${job.url} (${downloaded > 0 ? 'resuming at ' + humanSize(downloaded) : 'fresh'})`);
+  ensureWatchdog();
   sendJobList();
   const startedAt = Date.now();
   let lastBytes = downloaded, lastTime = startedAt;
@@ -370,7 +635,7 @@ async function runFileDownload(job) {
       : Number(res.headers.get('content-length') || 0);
     job.sizeTotal = total ? humanSize(total) : '—';
     job.downloaded = downloaded;
-    if (total) job.progress = (downloaded / total) * 100;
+    if (total) { job._progressFloor = (downloaded / total) * 100; job.progress = job._progressFloor; }
     const flags = (downloaded > 0 && res.status === 206) ? 'a' : 'w';
     if (flags === 'w') job.downloaded = 0;
     const stream = fs.createWriteStream(target, { flags });
@@ -390,7 +655,8 @@ async function runFileDownload(job) {
           const secs = Math.round((total - job.downloaded) / bps);
           job.eta = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
         }
-        if (total) job.progress = (job.downloaded / total) * 100;
+        if (total) job.progress = Math.max(job._progressFloor || 0, (job.downloaded / total) * 100);
+        job._lastActivity = Date.now();
         lastBytes = job.downloaded; lastTime = now;
         sendJobList();
       }
@@ -411,9 +677,10 @@ async function runFileDownload(job) {
   } catch (e) {
     job._controller = null;
     if (job.status === 'paused' || job.status === 'cancelled') return;
+    if (job._watchdogResolved) return; // watchdog already failed this job
     if (e && e.name === 'AbortError') return;
     job.status = 'error';
-    job.error = (e.message || 'Download failed').slice(0, 300);
+    job.error = scrubEngineWords(e.message || 'Download failed');
     log('DOWNLOAD', `File download failed (${job.url}): ${job.error}`, 'error');
     sendJobList();
     finishJob(job);
@@ -432,6 +699,7 @@ async function isOnWifi() {
 }
 
 async function startJob({ url, quality, kind }) {
+  await ensureToolReady(); // first run: finish the tool update before the first download
   const settings = loadSettings();
   if (settings.wifiOnly) {
     const onWifi = await isOnWifi();
@@ -547,6 +815,162 @@ function createWindow() {
   win.on('closed', () => { win = null; });
 }
 
+
+// ---------------------------------------------------------------- speed test (Cloudflare)
+// Same endpoints/logic as Android lib/services/speed_test_service.dart:
+// ping = fastest of 3 GETs, jitter = mean abs. diff. of successive pings,
+// download ~10 MB streamed with live samples, upload ~2 MB of zero bytes.
+// NEVER starts on its own — only on the 'speed-test-run' IPC call.
+const SPEED_PING_URL = 'https://speed.cloudflare.com/__down?bytes=0';
+const SPEED_DOWN_URL = 'https://speed.cloudflare.com/__down?bytes=10000000';
+const SPEED_UP_URL = 'https://speed.cloudflare.com/__up';
+const SPEED_DOWN_BYTES = 10000000;
+const SPEED_UP_BYTES = 2 * 1024 * 1024;
+let speedTestAbort = null;
+let speedTestRunning = false;
+function emitSpeedSample(sample) {
+  if (win && !win.isDestroyed()) win.webContents.send('speed-test-sample', sample);
+}
+function withTimeoutSignal(signal, ms) {
+  try { return AbortSignal.any([signal, AbortSignal.timeout(ms)]); } catch (_) { return signal; }
+}
+async function runSpeedTest() {
+  if (speedTestRunning) return { ok: false, error: 'A speed test is already running.' };
+  speedTestRunning = true;
+  const ctrl = new AbortController();
+  speedTestAbort = ctrl;
+  try {
+    // Ping: fastest of 3, keep all 3 samples for jitter.
+    const pings = [];
+    for (let i = 0; i < 3; i++) {
+      if (ctrl.signal.aborted) throw new Error('cancelled');
+      const start = Date.now();
+      const res = await fetch(SPEED_PING_URL, { signal: withTimeoutSignal(ctrl.signal, 60000) });
+      if (!res.ok) throw new Error(`Ping failed (HTTP ${res.status})`);
+      await res.arrayBuffer(); // drain the (empty) body
+      pings.push(Date.now() - start);
+      emitSpeedSample({ phase: 'ping', currentMbps: 0, progress: (i + 1) / 3 });
+    }
+    const pingMs = Math.min(...pings);
+    let jitterMs = 0;
+    if (pings.length > 1) {
+      let sum = 0;
+      for (let i = 1; i < pings.length; i++) sum += Math.abs(pings[i] - pings[i - 1]);
+      jitterMs = sum / (pings.length - 1);
+    }
+    // Download: stream ~10 MB, live samples every ~250 ms.
+    const downStart = Date.now();
+    const downRes = await fetch(SPEED_DOWN_URL, { signal: withTimeoutSignal(ctrl.signal, 60000) });
+    if (!downRes.ok) throw new Error(`Download failed (HTTP ${downRes.status})`);
+    let received = 0;
+    let lastEmit = 0;
+    const downReader = downRes.body.getReader();
+    while (true) {
+      const { done, value } = await downReader.read();
+      if (done) break;
+      received += value.length;
+      const now = Date.now();
+      if (now - lastEmit >= 250) {
+        const secs = (now - downStart) / 1000;
+        emitSpeedSample({ phase: 'download', currentMbps: secs > 0 ? (received * 8 / secs / 1e6) : 0, progress: Math.min(1, received / SPEED_DOWN_BYTES) });
+        lastEmit = now;
+      }
+    }
+    const downSecs = (Date.now() - downStart) / 1000;
+    if (downSecs <= 0 || received === 0) throw new Error('Download returned no data');
+    const downloadMbps = received * 8 / downSecs / 1e6;
+    emitSpeedSample({ phase: 'download', currentMbps: downloadMbps, progress: 1 });
+    // Upload: POST ~2 MB of zero bytes, live samples from bytes sent.
+    const upStart = Date.now();
+    let sent = 0;
+    let upLastEmit = 0;
+    const upBody = new ReadableStream({
+      pull(controller) {
+        if (sent >= SPEED_UP_BYTES) { controller.close(); return; }
+        const chunk = Math.min(65536, SPEED_UP_BYTES - sent);
+        controller.enqueue(new Uint8Array(chunk));
+        sent += chunk;
+        const now = Date.now();
+        if (now - upLastEmit >= 250) {
+          const secs = (now - upStart) / 1000;
+          emitSpeedSample({ phase: 'upload', currentMbps: secs > 0 ? (sent * 8 / secs / 1e6) : 0, progress: Math.min(1, sent / SPEED_UP_BYTES) });
+          upLastEmit = now;
+        }
+      }
+    });
+    let upRes;
+    try {
+      upRes = await fetch(SPEED_UP_URL, { method: 'POST', body: upBody, duplex: 'half', signal: withTimeoutSignal(ctrl.signal, 60000) });
+    } catch (e) {
+      // Fallback for runtimes without streaming request bodies: plain POST.
+      if (ctrl.signal.aborted) throw e;
+      upRes = await fetch(SPEED_UP_URL, { method: 'POST', body: Buffer.alloc(SPEED_UP_BYTES, 0), signal: withTimeoutSignal(ctrl.signal, 60000) });
+      sent = SPEED_UP_BYTES;
+    }
+    if (!upRes.ok) throw new Error(`Upload failed (HTTP ${upRes.status})`);
+    await upRes.arrayBuffer();
+    const upSecs = (Date.now() - upStart) / 1000;
+    if (upSecs <= 0) throw new Error('Upload returned no data');
+    const uploadMbps = SPEED_UP_BYTES * 8 / upSecs / 1e6;
+    emitSpeedSample({ phase: 'upload', currentMbps: uploadMbps, progress: 1 });
+    return { ok: true, downloadMbps, uploadMbps, pingMs, jitterMs };
+  } catch (e) {
+    if (ctrl.signal.aborted || (e && e.message === 'cancelled')) return { ok: false, error: 'Speed test cancelled.' };
+    log('SYSTEM', 'Speed test failed: ' + scrubEngineWords(e.message || 'Speed test failed'), 'error');
+    return { ok: false, error: scrubEngineWords(e.message || 'Speed test failed') || 'Speed test failed.' };
+  } finally {
+    speedTestRunning = false;
+    speedTestAbort = null;
+  }
+}
+
+// ---------------------------------------------------------------- in-app update download
+async function downloadUpdateFile(url, fileName) {
+  if (!url || !/^https?:\/\//i.test(String(url))) return { ok: false, error: ms('urlRequired') };
+  const safeName = String(fileName || 'SnapDL-update').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 120) || 'SnapDL-update';
+  const dest = path.join(app.getPath('downloads'), path.basename(safeName));
+  let res;
+  try {
+    res = await fetch(String(url), { redirect: 'follow' });
+  } catch (e) {
+    return { ok: false, error: scrubEngineWords(e.message || 'Download failed') || 'Download failed.' };
+  }
+  if (!res.ok) return { ok: false, error: `Server answered HTTP ${res.status}` };
+  const total = Number(res.headers.get('content-length') || 0) || 0;
+  const stream = fs.createWriteStream(dest);
+  const reader = res.body.getReader();
+  let received = 0;
+  const startedAt = Date.now();
+  let lastEmit = 0, lastBytes = 0, lastTime = startedAt;
+  const emit = (force) => {
+    const now = Date.now();
+    if (!force && now - lastEmit < 250) return;
+    const dt = (now - lastTime) / 1000;
+    const speedBps = dt > 0 ? (received - lastBytes) / dt : 0;
+    const etaSeconds = total && speedBps > 0 ? Math.round((total - received) / speedBps) : 0;
+    if (win && !win.isDestroyed()) win.webContents.send('update-download-progress', { received, total, percent: total ? (received / total) * 100 : 0, speedBps, etaSeconds });
+    lastEmit = now; lastBytes = received; lastTime = now;
+  };
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      stream.write(Buffer.from(value));
+      received += value.length;
+      emit(false);
+    }
+    await new Promise((resolve, reject) => { stream.end(err => err ? reject(err) : resolve()); });
+  } catch (e) {
+    try { stream.destroy(); } catch (_) {}
+    try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (_) {}
+    return { ok: false, error: scrubEngineWords(e.message || 'Download failed') || 'Download failed.' };
+  }
+  emit(true);
+  const s = loadSettings(); s.pendingUpdatePath = dest; saveSettings(s);
+  log('UPDATE', `Update package downloaded: ${dest} (${humanSize(received)})`);
+  return { ok: true, path: dest, size: received };
+}
+
 // ---------------------------------------------------------------- IPC
 ipcMain.handle('app-info', () => {
   const s = loadSettings();
@@ -583,24 +1007,23 @@ ipcMain.handle('choose-folder', async () => {
   return res.filePaths[0];
 });
 
-ipcMain.handle('fetch-info', async (_e, url) => {
+// One fetch-info attempt. retriable=true only on a non-zero exit
+// (a stale tool is the usual cause — mirrors Android FORMATS retry).
+function fetchInfoOnce(url) {
   const exe = ytdlpPath();
-  if (!exe) return { ok: false, error: ms('ytdlpMissing') };
-  if (!url || !/^https?:\/\//i.test(url)) return { ok: false, error: ms('invalidLink') };
-  log('INFO', 'Reading video info: ' + url);
-  return await new Promise(resolve => {
+  return new Promise(resolve => {
     const child = spawn(exe, ['-J', '--no-playlist', '--no-warnings', url], { windowsHide: true });
     let out = '', errBuf = '';
-    const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} resolve({ ok: false, error: ms('infoTimeout') }); }, 90000);
+    const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} resolve({ ok: false, error: ms('infoTimeout'), retriable: false }); }, 90000);
     child.stdout.on('data', d => { out += d.toString(); });
     child.stderr.on('data', d => { errBuf += d.toString(); });
-    child.on('error', e => { clearTimeout(timer); log('INFO', 'video-info failed to start: ' + scrubEngineWords(e.message), 'error'); resolve({ ok: false, error: ms('infoFailed') }); });
+    child.on('error', e => { clearTimeout(timer); log('INFO', 'video-info failed to start: ' + scrubEngineWords(e.message), 'error'); resolve({ ok: false, error: ms('infoFailed'), retriable: false }); });
     child.on('close', code => {
       clearTimeout(timer);
       if (code !== 0) {
-        const reason = scrubEngineWords(errBuf.trim().split('\n').filter(l => l.trim() && !l.includes('WARNING')).slice(-2).join(' ') || 'Could not read this link.').slice(0, 300);
+        const reason = scrubEngineWords(errBuf.trim().split('\n').filter(l => l.trim() && !l.includes('WARNING')).slice(-2).join(' ') || 'Could not read this link.');
         log('INFO', 'video-info failed: ' + reason, 'error');
-        resolve({ ok: false, error: reason });
+        resolve({ ok: false, error: reason, retriable: true });
         return;
       }
       try {
@@ -616,10 +1039,24 @@ ipcMain.handle('fetch-info', async (_e, url) => {
         });
       } catch (e) {
         log('INFO', 'video-info: could not parse the video data: ' + e.message, 'error');
-        resolve({ ok: false, error: ms('infoFailed') });
+        resolve({ ok: false, error: ms('infoFailed'), retriable: false });
       }
     });
   });
+}
+
+ipcMain.handle('fetch-info', async (_e, url) => {
+  const exe = ytdlpPath();
+  if (!exe) return { ok: false, error: ms('ytdlpMissing') };
+  if (!url || !/^https?:\/\//i.test(url)) return { ok: false, error: ms('invalidLink') };
+  await ensureToolReady(); // first run: finish the tool update before the first fetch
+  log('INFO', 'Reading video info: ' + url);
+  const first = await fetchInfoOnce(url);
+  if (first.ok || !first.retriable) return first;
+  // Non-zero exit: update the tool once and retry the fetch once.
+  log('INFO', 'Video-info failed — updating the download tool and retrying once.');
+  await updateTool();
+  return await fetchInfoOnce(url);
 });
 
 ipcMain.handle('start-download', (_e, opts) => startJob(opts));
@@ -711,6 +1148,30 @@ ipcMain.handle('check-updates', async () => {
     log('UPDATE', 'Update check failed: ' + e.message, 'error');
     return { ok: false, error: ms('updateUnreachable') };
   }
+});
+
+ipcMain.handle('update-tool', () => updateTool());
+ipcMain.handle('tool-version', async () => { try { return await getToolVersion(); } catch (_) { return ''; } });
+ipcMain.handle('speed-test-run', () => runSpeedTest());
+ipcMain.handle('speed-test-cancel', () => {
+  if (speedTestAbort) { speedTestAbort.abort(); return { ok: true }; }
+  return { ok: false, error: 'No speed test is running.' };
+});
+ipcMain.handle('download-update', (_e, opts) => downloadUpdateFile(opts && opts.url, opts && opts.fileName));
+ipcMain.handle('install-update', async (_e, opts) => {
+  const target = (opts && opts.path) || loadSettings().pendingUpdatePath || '';
+  if (!target) return { ok: false, error: 'No downloaded update found.' };
+  const err = await shell.openPath(target); // opens the zip / installer
+  if (err) return { ok: false, error: err };
+  return { ok: true };
+});
+ipcMain.handle('set-update-tonight', (_e, opts) => {
+  // Renderer shows 'Update Tonight' scheduling; the actual overnight
+  // install is out of scope for this version.
+  const s = loadSettings();
+  s.updateTonight = !!(opts && typeof opts === 'object' ? opts.value : opts);
+  saveSettings(s);
+  return { ok: true };
 });
 
 ipcMain.handle('open-external', (_e, url) => { shell.openExternal(url); return { ok: true }; });
@@ -819,7 +1280,7 @@ const PREVIEW_STATE = {
     { time: new Date(Date.now() - 1000 * 60 * 3).toISOString(), category: 'DOWNLOAD', level: 'info', message: 'Starting download: https://www.youtube.com/watch?v=aqz-KE-bpKQ (quality: 1080p)' },
     { time: new Date(Date.now() - 1000 * 60 * 3).toISOString(), category: 'DOWNLOAD', level: 'info', message: 'Found: video 1920x1080 + audio, merging to MP4' },
     { time: new Date(Date.now() - 1000 * 60 * 12).toISOString(), category: 'DOWNLOAD', level: 'info', message: 'Finished: Big Buck Bunny — 4K 60fps Official Trailer (182.6 MB)' },
-    { time: new Date(Date.now() - 1000 * 60 * 60).toISOString(), category: 'UPDATE', level: 'info', message: 'You are on the latest version (1.0.0).' },
+    { time: new Date(Date.now() - 1000 * 60 * 60).toISOString(), category: 'UPDATE', level: 'info', message: 'You are on the latest version (1.0.6).' },
     { time: new Date(Date.now() - 1000 * 60 * 61).toISOString(), category: 'SYSTEM', level: 'info', message: 'SnapDL started.' }
   ]
 };
