@@ -75,4 +75,9 @@ jobs:
         # the APK is uploaded, and only then do analysis and tests run.
         # A failing test still fails the job, and its results are
         # reported and fixed afterwards — it just never blocks the build.
-        run: cd android && flutter analyze && flutter test
+        # v1.0.7 fix: the current Flutter stable treats info-level
+        # findings as fatal, so `flutter analyze` exited 1 on 74
+        # info-only deprecation notices (e.g. withOpacity) in
+        # pre-existing code, and `flutter test` never ran. --no-fatal-infos
+        # keeps real errors/warnings fatal while letting the tests run.
+        run: cd android && flutter analyze --no-fatal-infos && flutter test
