@@ -538,3 +538,139 @@ html[data-theme="dark"] .glass-select option { background: #1b2328; color: #eef2
 .yt-frame { padding: 0; overflow: hidden; height: calc(100vh - 300px); min-height: 420px; }
 .yt-frame webview { width: 100%; height: 100%; border-radius: 22px; background: #000; display: flex; }
 .yt-note { margin-top: 12px; font-size: 12.5px; line-height: 1.7; color: var(--ink-dim); max-width: 720px; }
+
+/* ================================================================
+   v1.0.7 — Speed test screen + Apple-style Updates card
+   Liquid-glass, SnapDL palette only: every color below comes from
+   var(--...) — no new colors, no Apple blue. The update card and the
+   speed card float as a SECOND layer above the app (.glass-elevated),
+   they are never flat against the background.
+   ================================================================ */
+
+/* ---------- elevated glass: a floating 2nd layer, not flat ---------- */
+.glass-elevated {
+  background: var(--glass-strong);
+  border: 1px solid var(--stroke);
+  border-radius: 26px;
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  box-shadow:
+    0 24px 60px rgba(31, 42, 51, .22),
+    0 4px 14px rgba(31, 42, 51, .10),
+    inset 0 1px 0 rgba(255, 255, 255, .9),
+    inset 0 -1px 0 rgba(78, 122, 142, .12);
+  transform: translateY(-2px);
+}
+html[data-theme="dark"] .glass-elevated {
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, .55),
+    0 4px 14px rgba(0, 0, 0, .35),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -1px 0 rgba(255, 255, 255, .05);
+}
+
+/* ---------- speed test ---------- */
+.speed-card-wrap { max-width: 680px; }
+.speed-gauge-wrap { position: relative; max-width: 340px; margin: 0 auto; }
+.speed-gauge { display: block; width: 100%; height: auto; }
+.gauge-track { stroke: var(--stroke-soft); }
+.gauge-arc { stroke: url(#speedGrad); transition: stroke-dashoffset .2s linear; }
+.gauge-ticks line { stroke: var(--ink-faint); }
+.gauge-labels text {
+  fill: var(--ink-dim);
+  font-size: 11px; font-weight: 700;
+  text-anchor: middle;
+  font-family: inherit;
+}
+#speedGrad .gs1 { stop-color: var(--accent2); }
+#speedGrad .gs2 { stop-color: var(--accent1); }
+#speedGrad .gs3 { stop-color: var(--accent3); }
+.speed-needle {
+  transition: transform .2s linear;
+  transform-box: view-box;
+  transform-origin: 150px 150px;
+}
+.speed-needle line { stroke: url(#speedGrad); }
+.speed-needle circle { fill: url(#speedGrad); }
+.speed-needle .needle-hub { fill: #fff; }
+.speed-center {
+  position: absolute; left: 0; right: 0; top: 63%;
+  transform: translateY(-50%);
+  text-align: center; pointer-events: none;
+}
+.speed-value-row {
+  font-size: 46px; font-weight: 900; line-height: 1;
+  color: var(--accent1);
+  font-variant-numeric: tabular-nums;
+}
+.speed-value-row .speed-unit { font-size: 17px; font-weight: 800; margin-inline-start: 6px; }
+.speed-phase { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--ink-dim); min-height: 18px; }
+.speed-progress { margin-top: 6px; }
+.speed-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+.speed-card { padding: 16px 18px; text-align: center; }
+.speed-card-label { display: block; font-size: 12.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim); }
+.speed-card-value { margin-top: 6px; font-size: 26px; font-weight: 900; color: var(--accent1); font-variant-numeric: tabular-nums; }
+.speed-card-value .speed-unit-label { font-size: 14px; font-weight: 800; margin-inline-start: 4px; }
+.speed-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.speed-stat {
+  display: flex; align-items: baseline; justify-content: center; gap: 8px;
+  padding: 13px 16px;
+}
+.speed-stat span { font-size: 12.5px; font-weight: 700; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .6px; }
+.speed-stat b { font-size: 19px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.speed-stat i { font-style: normal; font-size: 12px; color: var(--ink-faint); }
+.unit-toggle { justify-content: center; margin-top: 18px; }
+.unit-toggle button { width: auto; padding: 9px 18px; }
+.speed-actions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+.speed-actions .btn-primary { min-width: 190px; }
+.speed-note { margin-top: 16px; text-align: center; }
+html[data-theme="dark"] .speed-value-row { color: #8fb4c4; }
+html[data-theme="dark"] .speed-card-value { color: #8fb4c4; }
+
+/* ---------- Apple-style updates card (SnapDL glass, 3D float) ---------- */
+.update-card-3d { padding: 26px 26px 22px; max-width: 680px; margin-top: 4px; }
+.update-card-head { display: flex; align-items: center; gap: 16px; }
+.update-logo {
+  width: 64px; height: 64px; flex: none; border-radius: 18px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--accent1), var(--accent2) 55%, var(--accent3));
+  box-shadow: 0 12px 30px rgba(78, 122, 142, .45), inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.update-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.update-head-text { min-width: 0; }
+.update-name { font-size: 22px; font-weight: 800; line-height: 1.3; }
+.update-size { margin-top: 4px; font-size: 13px; color: var(--ink-dim); }
+.update-size b { color: var(--ink); }
+.update-features-label {
+  margin-top: 20px; font-size: 12.5px; font-weight: 700;
+  letter-spacing: .6px; text-transform: uppercase; color: var(--ink-dim);
+}
+.update-notes {
+  margin-top: 8px; font-size: 14px; line-height: 1.75; color: var(--ink-dim);
+  white-space: pre-line;
+}
+.update-notes:empty { display: none; }
+.update-tonight-link {
+  display: block; width: 100%; margin-top: 14px; padding: 6px 0;
+  background: none; border: none; text-align: center;
+  font-size: 14px; font-weight: 700; color: var(--accent1);
+  transition: filter .25s var(--ease);
+}
+.update-tonight-link:hover { filter: brightness(1.15); text-decoration: underline; }
+html[data-theme="dark"] .update-tonight-link { color: #8fb4c4; }
+.update-progress { margin-top: 20px; }
+.update-progress-label { font-size: 13.5px; font-weight: 700; color: var(--ink-dim); }
+.update-pct {
+  margin-top: 8px; font-size: 34px; font-weight: 900; line-height: 1;
+  color: var(--accent1); font-variant-numeric: tabular-nums;
+}
+.update-progress .progress-track { margin-top: 12px; }
+.update-progress-meta {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+html[data-theme="dark"] .update-pct { color: #8fb4c4; }
+.update-install-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.update-install-row .btn-primary { flex: 1; min-width: 160px; }
+.update-install-row .glass-btn { flex: 1; min-width: 140px; padding: 13px 16px; }

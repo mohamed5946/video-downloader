@@ -9,7 +9,7 @@
   // ================= i18n =================
   const I18N = {
     en: {
-      brandSub: 'Video Downloader', navDownload: 'Download', navYoutube: 'YouTube', navHistory: 'History', navSettings: 'Settings',
+      brandSub: 'Video Downloader', navDownload: 'Download', navYoutube: 'YouTube', navHistory: 'History', navSpeed: 'Speed', navSettings: 'Settings',
       checkUpdates: 'Check for updates',
       dlTitle1: 'Paste a link.', dlTitle2: 'Get the video.',
       dlSub: 'YouTube · TikTok · Instagram · Facebook · X — free, no ads, no sign-in.',
@@ -75,6 +75,21 @@
       updateAvailable: 'Update available — v', updateReady: 'A newer version of SnapDL is ready.',
       updateLatest: 'You are up to date', updateLatestBody: 'SnapDL v{version} is the latest version.',
       updateFail: 'Could not check for updates', updateDownload: 'Download update ↗', close: 'Close',
+      updates_update_now: 'Update Now', updates_update_tonight: 'Update Tonight',
+      updates_tonight_scheduled: 'Update scheduled for tonight.',
+      updates_downloading: 'Downloading update…', updates_install_now: 'Install Now',
+      updates_install_later: 'Install Later',
+      updates_install_later_saved: 'Update saved — you can install it later from Settings → Updates.',
+      updates_download_failed: 'Update download failed.',
+      updates_size: 'Size', updates_features: "What's new",
+      speedtest_title: 'Internet Speed Test',
+      speedtest_note: 'Measure your download, upload, ping and jitter — the test only starts when you tap Start.',
+      speedtest_start: '▶ Start test', speedtest_again: '↻ Measure again',
+      speedtest_measuring: 'Measuring…', speedtest_download: 'Download', speedtest_upload: 'Upload',
+      speedtest_ping: 'Ping', speedtest_jitter: 'Jitter',
+      speedtest_failed: 'Speed test failed.', speedtest_retry: 'Retry',
+      speedtest_unit_mbps: 'Mbps', speedtest_unit_mbs: 'MB/s',
+      speedtest_datanote: 'Uses about 12 MB of data per test.',
       previewLoading: 'Fetching video info…', previewPlay: 'Play preview',
       fetchErrorLink: 'Could not read this link.', fetchErrorGeneric: 'Something went wrong: ',
       uploaderBy: 'by {name}', durationLabel: 'Duration {d}',
@@ -89,7 +104,7 @@
       qLabelFile: 'Original file'
     },
     ar: {
-      brandSub: 'منزّل الفيديو', navDownload: 'التنزيل', navYoutube: 'يوتيوب', navHistory: 'السجل', navSettings: 'الإعدادات',
+      brandSub: 'منزّل الفيديو', navDownload: 'التنزيل', navYoutube: 'يوتيوب', navHistory: 'السجل', navSpeed: 'سرعة الإنترنت', navSettings: 'الإعدادات',
       checkUpdates: 'التحقق من التحديثات',
       dlTitle1: 'الصق رابطًا.', dlTitle2: 'واحصل على الفيديو.',
       dlSub: 'يوتيوب · تيك توك · إنستجرام · فيسبوك · إكس — مجاني، بدون إعلانات، بدون تسجيل دخول.',
@@ -155,6 +170,21 @@
       updateAvailable: 'يوجد تحديث — الإصدار ', updateReady: 'نسخة أحدث من SnapDL جاهزة.',
       updateLatest: 'أنت على أحدث نسخة', updateLatestBody: 'SnapDL الإصدار {version} هو الأحدث.',
       updateFail: 'تعذّر التحقق من التحديثات', updateDownload: 'تنزيل التحديث ↗', close: 'إغلاق',
+      updates_update_now: 'التحديث الآن', updates_update_tonight: 'التحديث الليلة',
+      updates_tonight_scheduled: 'تمت جدولة التحديث الليلة.',
+      updates_downloading: 'جارٍ تنزيل التحديث…', updates_install_now: 'التثبيت الآن',
+      updates_install_later: 'التثبيت لاحقًا',
+      updates_install_later_saved: 'تم حفظ التحديث — يمكنك تثبيته لاحقًا من الإعدادات ← التحديثات.',
+      updates_download_failed: 'فشل تنزيل التحديث.',
+      updates_size: 'الحجم', updates_features: 'المزايا الجديدة',
+      speedtest_title: 'اختبار سرعة الإنترنت',
+      speedtest_note: 'قِس سرعة التنزيل والرفع والبينج والتذبذب — لا يبدأ الاختبار إلا عند الضغط على «ابدأ».',
+      speedtest_start: '▶ ابدأ الاختبار', speedtest_again: '↻ قياس مرة أخرى',
+      speedtest_measuring: 'جارٍ القياس…', speedtest_download: 'التنزيل', speedtest_upload: 'الرفع',
+      speedtest_ping: 'البينج', speedtest_jitter: 'التذبذب',
+      speedtest_failed: 'فشل اختبار السرعة.', speedtest_retry: 'إعادة المحاولة',
+      speedtest_unit_mbps: 'Mbps', speedtest_unit_mbs: 'MB/s',
+      speedtest_datanote: 'يستهلك الاختبار حوالي 12 م.ب. من البيانات.',
       previewLoading: 'جارٍ جلب معلومات الفيديو…', previewPlay: 'تشغيل المعاينة',
       fetchErrorLink: 'تعذّر قراءة هذا الرابط.', fetchErrorGeneric: 'حدث خطأ: ',
       uploaderBy: 'بواسطة {name}', durationLabel: 'المدة {d}',
@@ -186,7 +216,7 @@
   // ================= mock API (plain browser render) =================
   const MOCK = {
     appInfo: async () => ({ name: 'SnapDL', version: '1.0.0', portfolioUrl: 'https://mohamed5946.github.io/portfolio/', releasesUrl: 'https://github.com/mohamed5946/video-downloader/releases/latest', downloadDir: 'C:\\Users\\DELL\\Downloads\\SnapDL', adblock: true, adblockBlocked: 128 }),
-    getSettings: async () => ({ theme: 'light', language: 'ar', defaultQuality: 'highest', wifiOnly: false, maxConcurrent: 1, adblock: true, adblockBlocked: 128, autoCheck: false, downloadDir: 'C:\\Users\\DELL\\Downloads\\SnapDL' }),
+    getSettings: async () => ({ theme: 'light', language: 'ar', defaultQuality: 'highest', wifiOnly: false, maxConcurrent: 1, adblock: true, adblockBlocked: 128, autoCheck: false, speedUnit: 'Mbps', updateTonight: false, pendingUpdatePath: '', downloadDir: 'C:\\Users\\DELL\\Downloads\\SnapDL' }),
     setSetting: async () => ({ ok: true }),
     getAdblockState: async () => ({ enabled: true, blocked: 128, extensionConnected: true, extVersion: '1.0.0' }),
     chooseFolder: async () => null,
@@ -204,6 +234,13 @@
     clearLogs: async () => ({ ok: true }),
     copyLogs: async () => ({ ok: true }),
     checkUpdates: async () => ({ ok: true, update: false, version: '1.0.0' }),
+    runSpeedTest: async () => ({ ok: true, downloadMbps: 94.5, uploadMbps: 32.1, pingMs: 40, jitterMs: 31 }),
+    cancelSpeedTest: async () => ({ ok: true }),
+    onSpeedTestSample: () => {},
+    downloadUpdate: async () => ({ ok: true, path: 'C:\\Downloads\\SnapDL-update.zip', size: 260789130 }),
+    onUpdateDownloadProgress: () => {},
+    installUpdate: async () => ({ ok: true }),
+    setUpdateTonight: async () => ({ ok: true }),
     openExternal: async () => ({ ok: true }),
     openExtensionFolder: async () => ({ ok: true }),
     onDownloadList: () => {}, onHistoryUpdated: () => {}, onLogAdded: () => {}, onSettingsChanged: () => {},
@@ -215,7 +252,7 @@
   const IS_MOCK = api === MOCK;
 
   // ================= state =================
-  let settings = { theme: 'light', language: 'ar', defaultQuality: 'highest', wifiOnly: false, maxConcurrent: 1, adblock: true, adblockBlocked: 0, autoCheck: false };
+  let settings = { theme: 'light', language: 'ar', defaultQuality: 'highest', wifiOnly: false, maxConcurrent: 1, adblock: true, adblockBlocked: 0, autoCheck: false, speedUnit: 'Mbps', updateTonight: false, pendingUpdatePath: '' };
   let selectedQuality = 'highest';
   let currentInfo = null;
   let activeJobs = [];
@@ -709,11 +746,124 @@
   $('openExtFolderBtn2').addEventListener('click', openExtFolder);
 
   // ---- Updates screen ----
+  // The last check result that had an update available, and the last
+  // downloaded update package waiting to be installed.
+  let latestUpdate = null;
+  let pendingUpdate = null;
+  let updDownloading = false;
+
   function refreshUpdatesScreen() {
     if (appInfo) $('updVersion').textContent = 'v' + appInfo.version;
     const ac = $('autoCheckToggle'); if (ac) ac.checked = !!settings.autoCheck;
+    if (latestUpdate) renderUpdateCard(latestUpdate);
+  }
+  function renderUpdateCard(res) {
+    const card = $('updCard');
+    if (!card) return;
+    $('updVersionNew').textContent = 'SnapDL v' + res.version;
+    const size = res.sizeBytes || res.winSizeBytes || res.size || null;
+    $('updSize').textContent = size ? fmtSize(size) : '—';
+    const notes = $('updNotes');
+    notes.textContent = res.notes || '';
+    notes.style.display = res.notes ? '' : 'none';
+    $('updProgressWrap').classList.add('hidden');
+    $('updInstallRow').classList.add('hidden');
+    $('updUpdateNowBtn').classList.remove('hidden');
+    $('updUpdateNowBtn').disabled = false;
+    $('updTonightBtn').classList.remove('hidden');
+    $('updEmpty').classList.add('hidden');
+    card.classList.remove('hidden');
+  }
+  function setUpdProgress(pct, speedBps, etaSeconds) {
+    const p = Math.max(0, Math.min(100, pct || 0));
+    $('updPct').textContent = Math.round(p) + '%';
+    const fill = $('updProgressFill');
+    if (fill) fill.style.width = p + '%';
+    $('updSpeed').textContent = speedBps ? fmtSize(speedBps) + '/s' : '—';
+    $('updEta').textContent = fmtEta(etaSeconds);
   }
   $('updCheckBtn').addEventListener('click', () => checkUpdates(false));
+  $('updUpdateNowBtn').addEventListener('click', async () => {
+    const res = latestUpdate;
+    if (!res || !res.url || updDownloading) return;
+    if (typeof api.downloadUpdate !== 'function') {
+      toast(t('updates_download_failed'));
+      return;
+    }
+    updDownloading = true;
+    const btn = $('updUpdateNowBtn');
+    btn.disabled = true;
+    $('updTonightBtn').classList.add('hidden');
+    $('updInstallRow').classList.add('hidden');
+    $('updProgressWrap').classList.remove('hidden');
+    setUpdProgress(0, 0, null);
+    try {
+      const dl = await api.downloadUpdate({ url: res.url, fileName: 'SnapDL-update.zip' });
+      if (!dl || !dl.ok) {
+        toast(t('updates_download_failed') + (dl && dl.error ? ' ' + dl.error : ''));
+        $('updProgressWrap').classList.add('hidden');
+        $('updTonightBtn').classList.remove('hidden');
+        btn.disabled = false;
+        return;
+      }
+      pendingUpdate = dl;
+      $('updProgressWrap').classList.add('hidden');
+      btn.classList.add('hidden');
+      $('updInstallRow').classList.remove('hidden');
+    } catch (e) {
+      toast(t('updates_download_failed') + ' ' + (e && e.message ? e.message : ''));
+      $('updProgressWrap').classList.add('hidden');
+      $('updTonightBtn').classList.remove('hidden');
+      btn.disabled = false;
+    } finally {
+      updDownloading = false;
+    }
+  });
+  $('updTonightBtn').addEventListener('click', async () => {
+    try {
+      if (typeof api.setUpdateTonight === 'function') await api.setUpdateTonight({ value: true });
+      await api.setSetting('updateTonight', true);
+      settings.updateTonight = true;
+      toast(t('updates_tonight_scheduled'));
+    } catch (e) {
+      toast(t('updateFail'));
+    }
+  });
+  $('updInstallNowBtn').addEventListener('click', async () => {
+    if (!pendingUpdate || !pendingUpdate.path) return;
+    try {
+      const res = await api.installUpdate({ path: pendingUpdate.path });
+      if (!res.ok) toast(res.error || t('updateFail'));
+    } catch (e) {
+      toast(e && e.message ? e.message : t('updateFail'));
+    }
+  });
+  $('updInstallLaterBtn').addEventListener('click', async () => {
+    try {
+      if (pendingUpdate && pendingUpdate.path) {
+        await api.setSetting('pendingUpdatePath', pendingUpdate.path);
+        settings.pendingUpdatePath = pendingUpdate.path;
+      }
+    } catch (_) {}
+    $('updInstallRow').classList.add('hidden');
+    $('updUpdateNowBtn').classList.remove('hidden');
+    $('updUpdateNowBtn').disabled = false;
+    $('updTonightBtn').classList.remove('hidden');
+    toast(t('updates_install_later_saved'));
+  });
+  if (typeof api.onUpdateDownloadProgress === 'function') {
+    api.onUpdateDownloadProgress(p => {
+      if (!p || !updDownloading) return;
+      const pct = p.percent != null ? p.percent
+        : (p.total ? Math.round((p.received || 0) / p.total * 100) : 0);
+      setUpdProgress(pct, p.speedBps, p.etaSeconds);
+      // The update manifest carries no file size — fall back to the
+      // Content-Length reported by the download itself.
+      if (p.total && latestUpdate && !(latestUpdate.sizeBytes || latestUpdate.winSizeBytes)) {
+        $('updSize').textContent = fmtSize(p.total);
+      }
+    });
+  }
 
   api.onSettingsChanged(change => {
     if (!change) return;
@@ -724,6 +874,160 @@
     if (change.key === 'adblock') refreshAdblockScreen();
     markOptions();
   });
+
+  // ================= speed test =================
+  // Circular gauge, 0–1000 Mbps on a log scale. The needle is drawn pointing
+  // east (right) in the SVG, so rotate(-210deg) lands it at the lower-left
+  // and rotate(30deg) at the lower-right — a 240° sweep through the top,
+  // like the Speedtest dial. Log fraction = ln(1+mbps) / ln(1001).
+  let speedUnit = 'Mbps';
+  let speedRunning = false;
+  let speedRunId = 0;
+  let speedLastLiveMbps = 0;
+  let speedHasResult = false;
+
+  function gaugeFraction(mbps) {
+    return Math.log(1 + Math.max(0, mbps || 0)) / Math.log(1001);
+  }
+  function gaugeAngle(mbps) {
+    return -210 + gaugeFraction(mbps) * 240;
+  }
+  function fmtSpeed(mbps, unit) {
+    if (mbps == null || isNaN(mbps)) return '—';
+    const v = unit === 'MB/s' ? mbps / 8 : mbps;
+    return v >= 100 ? String(Math.round(v)) : v.toFixed(1);
+  }
+  function fmtEta(sec) {
+    if (sec == null || isNaN(sec) || sec < 0) return '—';
+    const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+  function setGauge(mbps) {
+    const needle = $('speedNeedle');
+    if (needle) needle.style.transform = 'rotate(' + gaugeAngle(mbps) + 'deg)';
+    const arc = $('speedArc');
+    if (arc) arc.style.strokeDashoffset = String(100 - gaugeFraction(mbps) * 100);
+    const val = $('speedValue');
+    if (val) val.textContent = fmtSpeed(mbps, speedUnit);
+    const unitEl = $('speedUnit');
+    if (unitEl) unitEl.textContent = speedUnit;
+  }
+  function setSpeedUnitUI() {
+    document.querySelectorAll('#speedUnitToggle button').forEach(b =>
+      b.classList.toggle('selected', b.dataset.unit === speedUnit));
+    document.querySelectorAll('.speed-unit-label').forEach(el => { el.textContent = speedUnit; });
+    setGauge(speedLastLiveMbps);
+    if (speedHasResult) {
+      const dl = $('speedDownload'), ul = $('speedUpload');
+      if (dl && dl.dataset.mbps) dl.textContent = fmtSpeed(Number(dl.dataset.mbps), speedUnit);
+      if (ul && ul.dataset.mbps) ul.textContent = fmtSpeed(Number(ul.dataset.mbps), speedUnit);
+    }
+  }
+  function setSpeedPhase(text) {
+    const el = $('speedPhase');
+    if (el) el.textContent = text || '';
+  }
+  function setSpeedProgress(p) {
+    const fill = $('speedProgressFill');
+    if (fill) fill.style.width = Math.max(0, Math.min(100, p || 0)) * 100 + '%';
+  }
+  function showSpeedError(msg) {
+    const el = $('speedError');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function setSpeedButtons(running) {
+    const start = $('speedStartBtn'), cancel = $('speedCancelBtn');
+    if (start) {
+      start.disabled = running;
+      start.textContent = running ? t('speedtest_measuring')
+        : (speedHasResult ? t('speedtest_again') : t('speedtest_start'));
+    }
+    if (cancel) cancel.classList.toggle('hidden', !running);
+  }
+  function resetSpeedResults() {
+    speedHasResult = false;
+    speedLastLiveMbps = 0;
+    ['speedDownload', 'speedUpload', 'speedPing', 'speedJitter'].forEach(id => {
+      const el = $(id);
+      if (el) { el.textContent = '—'; delete el.dataset.mbps; }
+    });
+    setGauge(0);
+    setSpeedProgress(0);
+    setSpeedPhase('');
+    $('speedError').classList.add('hidden');
+  }
+  function fillSpeedResults(res) {
+    speedHasResult = true;
+    speedLastLiveMbps = res.downloadMbps || 0;
+    const dl = $('speedDownload'), ul = $('speedUpload');
+    if (dl) { dl.dataset.mbps = String(res.downloadMbps); dl.textContent = fmtSpeed(res.downloadMbps, speedUnit); }
+    if (ul) { ul.dataset.mbps = String(res.uploadMbps); ul.textContent = fmtSpeed(res.uploadMbps, speedUnit); }
+    if ($('speedPing')) $('speedPing').textContent = res.pingMs != null ? Math.round(res.pingMs) : '—';
+    if ($('speedJitter')) $('speedJitter').textContent = res.jitterMs != null ? Math.round(res.jitterMs) : '—';
+    setGauge(res.downloadMbps || 0);
+    setSpeedProgress(1);
+    setSpeedPhase('');
+  }
+  async function startSpeedTest() {
+    if (speedRunning) return;
+    if (typeof api.runSpeedTest !== 'function') {
+      showSpeedError(t('speedtest_failed'));
+      return;
+    }
+    const runId = ++speedRunId;
+    speedRunning = true;
+    resetSpeedResults();
+    setSpeedButtons(true);
+    setSpeedPhase(t('speedtest_measuring'));
+    try {
+      const res = await api.runSpeedTest();
+      if (runId !== speedRunId) return; // cancelled while running
+      if (!res || !res.ok) {
+        showSpeedError(t('speedtest_failed') + (res && res.error ? ' ' + res.error : ''));
+        setSpeedPhase('');
+        return;
+      }
+      fillSpeedResults(res);
+    } catch (e) {
+      if (runId !== speedRunId) return;
+      showSpeedError(t('speedtest_failed') + ' ' + (e && e.message ? e.message : ''));
+      setSpeedPhase('');
+    } finally {
+      if (runId === speedRunId) {
+        speedRunning = false;
+        setSpeedButtons(false);
+      }
+    }
+  }
+  async function cancelSpeedTest() {
+    speedRunId++; // invalidate any in-flight run / samples
+    speedRunning = false;
+    try { if (typeof api.cancelSpeedTest === 'function') await api.cancelSpeedTest(); } catch (_) {}
+    setSpeedProgress(0);
+    setSpeedPhase('');
+    setSpeedButtons(false);
+  }
+  if (typeof api.onSpeedTestSample === 'function') {
+    api.onSpeedTestSample(sample => {
+      if (!speedRunning || !sample) return;
+      const mbps = sample.currentMbps || 0;
+      speedLastLiveMbps = mbps;
+      setGauge(mbps);
+      setSpeedProgress(sample.progress || 0);
+      const phaseKey = { ping: 'speedtest_ping', download: 'speedtest_download', upload: 'speedtest_upload' };
+      setSpeedPhase(sample.phase ? (t(phaseKey[sample.phase] || 'speedtest_measuring') + '…') : t('speedtest_measuring'));
+    });
+  }
+  $('speedStartBtn').addEventListener('click', startSpeedTest);
+  $('speedCancelBtn').addEventListener('click', cancelSpeedTest);
+  document.querySelectorAll('#speedUnitToggle button').forEach(b => b.addEventListener('click', async () => {
+    speedUnit = b.dataset.unit;
+    settings.speedUnit = speedUnit;
+    try { await api.setSetting('speedUnit', speedUnit); } catch (_) {}
+    setSpeedUnitUI();
+  }));
 
   // ================= updates =================
   function openUpdateModal(title, body, downloadUrl) {
@@ -740,22 +1044,34 @@
   }
   $('updateCloseBtn').addEventListener('click', () => $('updateModal').classList.add('hidden'));
   $('updateModal').addEventListener('click', e => { if (e.target === $('updateModal')) $('updateModal').classList.add('hidden'); });
+  // Returns the check result (or null on failure). When an update is
+  // available it is rendered into the Apple-style card in #sub-updates and
+  // that sub-screen is opened (unless the check was silent). The modal is
+  // kept ONLY for the checking / up-to-date / error states.
   async function checkUpdates(silent) {
     if (!silent) openUpdateModal(t('updateChecking'), t('updateWait'), null);
     try {
       const res = await api.checkUpdates();
       if (!res.ok) {
         if (!silent) openUpdateModal(t('updateFail'), esc(res.error || 'Unknown error.'), null);
-        return;
+        return null;
       }
       if (res.update) {
-        openUpdateModal(t('updateAvailable') + res.version,
-          t('updateReady') + (res.notes ? '<br><br>' + esc(res.notes) : ''), res.url);
-      } else if (!silent) {
+        latestUpdate = res;
+        renderUpdateCard(res);
+        if (!silent) {
+          $('updateModal').classList.add('hidden');
+          openSubScreen('updates');
+        }
+        return res;
+      }
+      if (!silent) {
         openUpdateModal(t('updateLatest'), t('updateLatestBody', { version: res.version }), null);
       }
+      return res;
     } catch (e) {
       if (!silent) openUpdateModal(t('updateFail'), esc(e.message), null);
+      return null;
     }
   }
   $('updateBtn').addEventListener('click', () => checkUpdates(false));
@@ -835,6 +1151,8 @@
     applyTheme();
     selectedQuality = settings.defaultQuality || 'highest';
     markQuality('qualityGrid', selectedQuality);
+    speedUnit = settings.speedUnit === 'MB/s' ? 'MB/s' : 'Mbps';
+    setSpeedUnitUI();
     markOptions();
     applyAllStagger(document);
     try {
