@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models.dart';
 import '../services/adblock_service.dart';
+import '../services/engine_service.dart';
 import '../services/log_service.dart';
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
@@ -793,6 +794,9 @@ class UpdatesScreen extends StatefulWidget {
 class _UpdatesScreenState extends State<UpdatesScreen> {
   String _version = '1.0.0';
   bool _checking = false;
+  // v1.0.5: download-tool update state (generic wording only).
+  bool _toolUpdating = false;
+  String? _toolStatusKey;
 
   @override
   void initState() {
@@ -850,6 +854,26 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     }
   }
 
+  // v1.0.5: update the download tool on demand. Runs in the
+  // background on first use and weekly on its own; this button is for
+  // when a link fails to read and the user wants the newest tool now.
+  Future<void> _updateTool() async {
+    setState(() {
+      _toolUpdating = true;
+      _toolStatusKey = null;
+    });
+    final result = await EngineService.instance.updateTool();
+    if (!mounted) return;
+    setState(() {
+      _toolUpdating = false;
+      _toolStatusKey = switch (result) {
+        ToolUpdateResult.done => 'tool_updated',
+        ToolUpdateResult.upToDate => 'tool_up_to_date',
+        ToolUpdateResult.failed => 'tool_update_failed',
+      };
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = SettingsService.instance;
@@ -904,6 +928,54 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
             subtitle: settings.tr('settings_updates_sub'),
             value: settings.autoCheckUpdates,
             onChanged: (v) => settings.setAutoCheckUpdates(v),
+          ),
+          // v1.0.5: download-tool update — same screen, its own section.
+          const SizedBox(height: 14),
+          GlassPanel(
+            child: Row(
+              children: [
+                const Icon(Icons.build_circle_outlined,
+                    color: AppColors.glowCyan, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        settings.tr('tool_update_title'),
+                        style: TextStyle(
+                          color: AppColors.textPrimaryOf(context),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _toolUpdating
+                            ? settings.tr('tool_updating')
+                            : _toolStatusKey != null
+                                ? settings.tr(_toolStatusKey!)
+                                : settings.tr('tool_update_body'),
+                        style: TextStyle(
+                            color: AppColors.textFaintOf(context),
+                            fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: GlassButton(
+              label: _toolUpdating
+                  ? settings.tr('tool_updating')
+                  : settings.tr('tool_update_now'),
+              icon: Icons.refresh_rounded,
+              onPressed: _toolUpdating ? null : _updateTool,
+            ),
           ),
         ]);
       },

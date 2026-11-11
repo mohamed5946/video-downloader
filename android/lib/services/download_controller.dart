@@ -231,9 +231,11 @@ class DownloadController extends ChangeNotifier {
       );
     } catch (e) {
       item.status = DownloadStatus.error;
-      item.error = e.toString();
+      // v1.0.5: the UI shows a generic message; the log gets the
+      // sanitized text (never raw native wording).
+      item.error = SettingsService.instance.tr('download_failed');
       _log.error(LogCategory.download, 'Download failed to start',
-          e.toString());
+          EngineService.sanitizeEngineText(e.toString()));
       notifyListeners();
       await _pumpQueue();
     }
@@ -247,7 +249,8 @@ class DownloadController extends ChangeNotifier {
       item.status = DownloadStatus.paused;
       _log.add(LogCategory.download, 'Paused: ${item.title}');
     } catch (e) {
-      _log.error(LogCategory.download, 'Pause failed', e.toString());
+      _log.error(LogCategory.download, 'Pause failed',
+          EngineService.sanitizeEngineText(e.toString()));
     }
     notifyListeners();
   }
@@ -287,8 +290,10 @@ class DownloadController extends ChangeNotifier {
       );
     } catch (e) {
       item.status = DownloadStatus.error;
-      item.error = e.toString();
-      _log.error(LogCategory.download, 'Resume failed', e.toString());
+      // v1.0.5: generic message on screen, sanitized text in the log.
+      item.error = SettingsService.instance.tr('download_failed');
+      _log.error(LogCategory.download, 'Resume failed',
+          EngineService.sanitizeEngineText(e.toString()));
       notifyListeners();
     }
   }
@@ -344,9 +349,13 @@ class DownloadController extends ChangeNotifier {
     }
     if (status == 'error') {
       item.status = DownloadStatus.error;
-      item.error = event['error'] as String?;
+      // v1.0.5: the native error text is already sanitized, but the UI
+      // still shows only the generic message — the detail belongs in
+      // the log, not on screen.
+      final raw = event['error'] as String?;
+      item.error = SettingsService.instance.tr('download_failed');
       _log.error(LogCategory.download, 'Download error: ${item.title}',
-          item.error);
+          raw == null ? null : EngineService.sanitizeEngineText(raw));
       notifyListeners();
       _pumpQueue();
       return;

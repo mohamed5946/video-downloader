@@ -169,6 +169,12 @@ class MainActivity : FlutterActivity() {
                     }
                     "downloadDir" -> result.success(downloadDir().absolutePath)
                     "freeSpaceMb" -> result.success(freeInternalStorageMb())
+                    // v1.0.5: update the download tool (the bundled
+                    // extractor) to its latest release — a stale bundled
+                    // version cannot read sites that changed their pages
+                    // (TikTok, 2026-11-11 field report). Runs on a worker
+                    // thread: the library call does network I/O.
+                    "updateTool" -> updateTool(result)
                     "openFile" -> {
                         val path = call.argument<String>("path") ?: ""
                         result.success(openFile(path))
@@ -262,7 +268,9 @@ class MainActivity : FlutterActivity() {
             try {
                 result.success(YoutubeDL.version(applicationContext) ?: "")
             } catch (t: Throwable) {
-                result.error("ENGINE_INIT", t.message, null)
+                // v1.0.5: sanitize — a raw native message must never
+                // reach the Dart side (and from there the log / UI).
+                result.error("ENGINE_INIT", sanitizeText(t.message ?: "null"), null)
             }
             return
         }
@@ -307,7 +315,10 @@ class MainActivity : FlutterActivity() {
                 val diagnostics = buildInitDiagnostics(t)
                 mainHandler.post {
                     answerPendingInit {
-                        it.error("ENGINE_INIT", t.message, diagnostics)
+                        // v1.0.5: sanitize the message too — the details
+                        // string is already sanitized by
+                        // buildInitDiagnostics, but the message was raw.
+                        it.error("ENGINE_INIT", sanitizeText(t.message ?: "null"), diagnostics)
                     }
                 }
             }
@@ -366,17 +377,51 @@ class MainActivity : FlutterActivity() {
         return if (simple in generic) simple else "download library error"
     }
 
+    // v1.0.5: update the download tool to its latest release.
+    // The library ships a bundled extractor that goes stale when sites
+    // change their pages; its own updater fetches the latest release
+    // from the official source and stores it for all later extractions.
+    // Synchronous network I/O — always called on a worker thread.
+    // Never leaks library naming: failures answer with a sanitized
+    // message only.
+    private fun updateTool(result: MethodChannel.Result) {
+        Thread {
+            try {
+                val status = YoutubeDL.getInstance().updateYoutubeDL(
+                    applicationContext,
+                    YoutubeDL.UpdateChannel.STABLE
+                )
+                val name = when (status) {
+                    YoutubeDL.UpdateStatus.DONE -> "done"
+                    YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "up_to_date"
+                    else -> "done"
+                }
+                mainHandler.post { result.success(mapOf("status" to name)) }
+            } catch (t: Throwable) {
+                android.util.Log.e(
+                    "SnapDL-Update",
+                    "Download tool update failed: ${t.javaClass.simpleName}"
+                )
+                val msg = sanitizeText(t.message ?: "update failed")
+                mainHandler.post { result.error("UPDATE_FAILED", msg, null) }
+            }
+        }.start()
+    }
+
     /** Strip any library / engine naming from a message before it reaches
      * the diagnostics log (a user-visible surface). */
     private fun sanitizeText(text: String): String {
         var out = text.replace("\n", " ").replace("\r", " ")
+        // v1.0.5: strip URLs entirely — a raw extractor error carries a
+        // github.com link that must never reach the screen or the log.
+        out = out.replace(Regex("https?://\\S+"), "")
         for (word in listOf(
             "yt-dlp", "ytdlp", "youtube-dl", "youtubedl",
             "libffmpeg", "ffmpeg", "engine"
         )) {
             out = out.replace(word, "service", ignoreCase = true)
         }
-        return out.take(300)
+        return out.replace(Regex("\\s+"), " ").trim().take(300)
     }
 
     private fun freeInternalStorageMb(): Long {
@@ -436,11 +481,14 @@ class MainActivity : FlutterActivity() {
             request.addOption("--no-warnings")
             val response = YoutubeDL.execute(request)
             if (response.out.isBlank()) {
-                throw Exception("yt-dlp returned no data. ${response.err}")
+                throw Exception("no data returned")
             }
             mainHandler.post { result.success(response.out) }
         } catch (e: Exception) {
-            mainHandler.post { result.error("FORMATS", e.message, null) }
+            // v1.0.5: sanitize — the raw extractor error carries a
+            // github.com link and library naming; the Dart side maps
+            // FORMATS to a generic localized message anyway.
+            mainHandler.post { result.error("FORMATS", sanitizeText(e.message ?: "extraction failed"), null) }
         }
     }
 
@@ -492,10 +540,12 @@ class MainActivity : FlutterActivity() {
             postEvent(mapOf("id" to id, "status" to "cancelled"))
             mainHandler.post { result.success(false) }
         } catch (e: Exception) {
+            // v1.0.5: sanitize — the raw message can carry extractor
+            // naming; the Dart side shows a generic message for it.
             postEvent(mapOf(
                 "id" to id,
                 "status" to "error",
-                "error" to (e.message ?: "Download failed")
+                "error" to sanitizeText(e.message ?: "Download failed")
             ))
             mainHandler.post { result.success(false) }
         }

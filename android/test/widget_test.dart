@@ -106,6 +106,17 @@ void main() {
     await _goBack(tester);
     await tester.pumpAndSettle();
 
+    // Updates: the screen shows the app version check AND the
+    // download-tool update section (v1.0.5) with its own button.
+    await tester.ensureVisible(find.text('التحديثات'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('التحديثات'));
+    await tester.pumpAndSettle();
+    expect(find.text('افحص الآن'), findsOneWidget);
+    expect(find.text('حدّث أداة التحميل'), findsOneWidget);
+    await _goBack(tester);
+    await tester.pumpAndSettle();
+
     // About: developer + portfolio button (last row — scroll into view).
     await tester.ensureVisible(find.text('عن التطبيق'));
     await tester.pumpAndSettle();

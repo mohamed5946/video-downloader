@@ -17,6 +17,8 @@ class SettingsService extends ChangeNotifier {
   static const _kMaxSimultaneous = 'snapdl_max_simultaneous';
   static const _kDownloadLocation = 'snapdl_download_location'; // public | app
   static const _kAutoCheck = 'snapdl_auto_check_updates';
+  // v1.0.5: last successful download-tool update, epoch ms (0 = never).
+  static const _kToolLastCheck = 'snapdl_tool_last_check';
 
   String language = 'ar';
   // v1.0.4: real theme preference. Default 'light' preserves the
@@ -27,6 +29,8 @@ class SettingsService extends ChangeNotifier {
   int maxSimultaneous = 1;
   String downloadLocation = 'public';
   bool autoCheckUpdates = true;
+  // v1.0.5: 0 = the download tool was never updated.
+  int toolLastCheckMs = 0;
 
   bool _loaded = false;
 
@@ -46,6 +50,7 @@ class SettingsService extends ChangeNotifier {
     maxSimultaneous = prefs.getInt(_kMaxSimultaneous) ?? 1;
     downloadLocation = prefs.getString(_kDownloadLocation) ?? 'public';
     autoCheckUpdates = prefs.getBool(_kAutoCheck) ?? true;
+    toolLastCheckMs = prefs.getInt(_kToolLastCheck) ?? 0;
     notifyListeners();
   }
 
@@ -58,6 +63,7 @@ class SettingsService extends ChangeNotifier {
     await prefs.setInt(_kMaxSimultaneous, maxSimultaneous);
     await prefs.setString(_kDownloadLocation, downloadLocation);
     await prefs.setBool(_kAutoCheck, autoCheckUpdates);
+    await prefs.setInt(_kToolLastCheck, toolLastCheckMs);
   }
 
   /// Localised string for [key] in the current language.
@@ -133,6 +139,14 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> setAutoCheckUpdates(bool v) async {
     autoCheckUpdates = v;
+    notifyListeners();
+    await _save();
+  }
+
+  /// v1.0.5: record a successful download-tool update (drives the
+  /// once-a-week background cadence in EngineService).
+  Future<void> setToolLastCheck(DateTime when) async {
+    toolLastCheckMs = when.millisecondsSinceEpoch;
     notifyListeners();
     await _save();
   }

@@ -47,6 +47,12 @@ class AppStrings {
       'engine_unavailable':
           'Downloads are not available on this device',
       'engine_no_formats': 'No download options were found for this link',
+      // v1.0.5: extraction failures never show the raw technical error —
+      // only this generic message (the raw one named the download tool
+      // and linked its issue page on screen).
+      'formats_unreadable':
+          'Couldn’t read this video’s info — try another link, or update the download tool from Settings.',
+      'download_failed': 'Download failed — try again.',
       'card_loading': 'Loading preview…',
       'card_play': 'Play preview',
       'card_no_thumb': 'No thumbnail',
@@ -102,6 +108,17 @@ class AppStrings {
           'Could not connect to the internet while checking for updates',
       'update_available_snackbar':
           'SnapDL {v} is available — Settings → Updates.',
+      // v1.0.5: the download tool (the bundled extractor) — generic
+      // wording only, never the library name, never a version number.
+      'tool_update_title': 'Download tool',
+      'tool_update_body':
+          'Keeps downloads working with the latest video sites. It updates itself in the background; you can also update it now.',
+      'tool_update_now': 'Update download tool',
+      'tool_updating': 'Updating download tool…',
+      'tool_updated': 'Download tool updated.',
+      'tool_up_to_date': 'Download tool is up to date.',
+      'tool_update_failed':
+          'Download tool update failed — check your connection and try again.',
       'settings_title': 'Settings',
       'settings_appearance': 'Appearance',
       'settings_appearance_sub': 'Light and night themes',
@@ -220,6 +237,11 @@ class AppStrings {
       'err_wifi_only': 'خيار "واي فاي فقط" مفعّل — اتصل بالواي فاي للتحميل.',
       'engine_unavailable': 'التحميل غير متاح على هذا الجهاز',
       'engine_no_formats': 'لم يتم العثور على خيارات تحميل لهذا الرابط',
+      // v1.0.5: انظر الملاحظة الإنجليزية — رسالة عامة فقط، بدون أي
+      // تفاصيل تقنية عن أداة التحميل.
+      'formats_unreadable':
+          'تعذّر قراءة بيانات هذا الفيديو — جرّب لينك تاني، أو حدّث أداة التحميل من الإعدادات.',
+      'download_failed': 'فشل التحميل — حاول تاني.',
       'card_loading': 'جارٍ تحميل المعاينة…',
       'card_play': 'تشغيل المعاينة',
       'card_no_thumb': 'لا توجد صورة مصغّرة',
@@ -275,6 +297,16 @@ class AppStrings {
           'تعذّر الاتصال بالإنترنت أثناء فحص التحديثات',
       'update_available_snackbar':
           'يتوفر SnapDL {v} — الإعدادات ← التحديثات.',
+      // v1.0.5: أداة التحميل — صياغة عامة فقط، بدون اسم المكتبة أو رقم إصدار.
+      'tool_update_title': 'أداة التحميل',
+      'tool_update_body':
+          'بتخلّي التحميل يشتغل مع أحدث المواقع. بتحدّث نفسها في الخلفية، وتقدر تحدّثها دلوقتي كمان.',
+      'tool_update_now': 'حدّث أداة التحميل',
+      'tool_updating': 'جارٍ تحديث أداة التحميل…',
+      'tool_updated': 'تم تحديث أداة التحميل.',
+      'tool_up_to_date': 'أداة التحميل محدّثة.',
+      'tool_update_failed':
+          'فشل تحديث أداة التحميل — اتأكد من الاتصال وحاول تاني.',
       'settings_title': 'الإعدادات',
       'settings_appearance': 'المظهر',
       'settings_appearance_sub': 'ثيم فاتح وليلي',
