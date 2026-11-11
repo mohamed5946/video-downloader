@@ -187,7 +187,8 @@ class DownloadController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    await _runEngine(item, format.id, format.isAudioOnly);
+    await _runEngine(item, format.id, format.isAudioOnly,
+        expectedTotalBytes: format.sizeBytes, title: item.title);
   }
 
   /// Start queued downloads while a slot is free.
@@ -216,29 +217,216 @@ class DownloadController extends ChangeNotifier {
       );
       next.status = DownloadStatus.downloading;
       notifyListeners();
-      await _runEngine(next, format.id, format.isAudioOnly);
+      await _runEngine(next, format.id, format.isAudioOnly,
+          expectedTotalBytes: format.sizeBytes, title: next.title);
     }
   }
 
   Future<void> _runEngine(
-      ActiveDownload item, String formatId, bool audioOnly) async {
+      ActiveDownload item, String formatId, bool audioOnly,
+      {int expectedTotalBytes = 0, String title = '', bool resume = false}) async {
+    _ensureWatchdog();
     try {
-      await _engine.startDownload(
-        id: item.id,
-        url: item.url,
-        formatId: formatId,
-        audioOnly: audioOnly,
-      );
+      // v1.0.6: the native call returns true when the download
+      // reported finished. The 'done' event normally arrives first,
+      // but the v1.0.5 field bug was exactly a finished download whose
+      // event never arrived — so a true result also completes the item
+      // (after a short grace for the event), via the folder check.
+      final ok = resume
+          ? await _engine.resumeDownload(
+              id: item.id,
+              url: item.url,
+              formatId: formatId,
+              audioOnly: audioOnly,
+              expectedTotalBytes: expectedTotalBytes,
+              title: title,
+            )
+          : await _engine.startDownload(
+              id: item.id,
+              url: item.url,
+              formatId: formatId,
+              audioOnly: audioOnly,
+              expectedTotalBytes: expectedTotalBytes,
+              title: title,
+            );
+      if (ok && item.status == DownloadStatus.downloading) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (item.status == DownloadStatus.downloading) {
+          await _resolveStalled(item);
+        }
+      }
     } catch (e) {
       item.status = DownloadStatus.error;
       // v1.0.5: the UI shows a generic message; the log gets the
       // sanitized text (never raw native wording).
       item.error = SettingsService.instance.tr('download_failed');
-      _log.error(LogCategory.download, 'Download failed to start',
+      _log.error(LogCategory.download,
+          resume ? 'Resume failed' : 'Download failed to start',
           EngineService.sanitizeEngineText(e.toString()));
       notifyListeners();
       await _pumpQueue();
     }
+  }
+
+  // ------------------------------------------------------- watchdog (v1.0.6)
+
+  Timer? _watchdog;
+
+  /// The 100% hang (2026-11-11 field report): the file was complete
+  /// but the native 'done' event never arrived, so the card stayed
+  /// stuck at 100% forever. A periodic check resolves any download
+  /// that goes quiet: at 100% with no event for 15s it looks for the
+  /// finished file in the download folder; silent for 5 minutes at
+  /// any progress it is a stall and fails with a clear message.
+  void _ensureWatchdog() {
+    _watchdog ??= Timer.periodic(const Duration(seconds: 5), (_) {
+      final now = DateTime.now();
+      var anyDownloading = false;
+      for (final item in List.of(active)) {
+        if (item.status != DownloadStatus.downloading) continue;
+        anyDownloading = true;
+        final silent = now.difference(item.lastEventAt);
+        if (item.progress >= 1.0 && silent > const Duration(seconds: 15)) {
+          unawaited(_resolveStalled(item));
+        } else if (silent > const Duration(minutes: 5)) {
+          item.status = DownloadStatus.error;
+          item.error = SettingsService.instance.tr('download_failed');
+          _log.error(LogCategory.download,
+              'Download stalled with no progress for 5 minutes',
+              item.title);
+          notifyListeners();
+          unawaited(_pumpQueue());
+        }
+      }
+      if (!anyDownloading) {
+        _watchdog?.cancel();
+        _watchdog = null;
+      }
+    });
+  }
+
+  /// A download went quiet at (or after) 100% with no done/error
+  /// event. If the finished file is in the download folder, the
+  /// download is done — the event was lost, the file was not.
+  /// Otherwise it really failed.
+  Future<void> _resolveStalled(ActiveDownload item) async {
+    if (item.status != DownloadStatus.downloading) return;
+    String? foundPath;
+    var foundSize = 0;
+    try {
+      final dir = await _engine.downloadDir();
+      if (dir.isNotEmpty) {
+        final d = Directory(dir);
+        if (await d.exists()) {
+          final files = await d
+              .list()
+              .where((e) => e is File)
+              .cast<File>()
+              .toList();
+          final picked =
+              pickFinishedFile(files, item.title, item.startedAt);
+          if (picked != null) {
+            foundPath = picked.path;
+            foundSize = await picked.length();
+          }
+        }
+      }
+    } catch (_) {
+      // Folder unreadable — treat as not found below.
+    }
+    if (foundPath != null) {
+      _log.add(LogCategory.download,
+          'Finished (recovered without done event): ${item.title} → $foundPath');
+      _finishItem(item, foundPath, foundSize);
+      return;
+    }
+    item.status = DownloadStatus.error;
+    item.error = SettingsService.instance.tr('download_failed');
+    _log.error(LogCategory.download,
+        'Download finished signalling but no file found', item.title);
+    notifyListeners();
+    await _pumpQueue();
+  }
+
+  /// Pick the finished file for [title] out of [files]: a real file
+  /// (never a .part), non-empty, written after the download started,
+  /// preferring a name that contains the title. Falls back to the
+  /// newest such file. Pure enough to unit-test.
+  static File? pickFinishedFile(
+      List<File> files, String title, DateTime since) {
+    final key = _titleKey(title);
+    File? newest;
+    DateTime? newestTime;
+    File? titled;
+    DateTime? titledTime;
+    for (final f in files) {
+      if (f.path.endsWith('.part')) continue;
+      FileStat stat;
+      try {
+        stat = f.statSync();
+      } catch (_) {
+        continue; // Vanished between listing and stat.
+      }
+      if (stat.size <= 0) continue;
+      if (stat.modified
+          .isBefore(since.subtract(const Duration(minutes: 2)))) {
+        continue;
+      }
+      if (newestTime == null || stat.modified.isAfter(newestTime)) {
+        newest = f;
+        newestTime = stat.modified;
+      }
+      if (key.length >= 6 &&
+          f.uri.pathSegments.last.contains(key) &&
+          (titledTime == null || stat.modified.isAfter(titledTime))) {
+        titled = f;
+        titledTime = stat.modified;
+      }
+    }
+    return titled ?? newest;
+  }
+
+  /// First characters of the title, as they appear in the saved
+  /// filename (the download tool keeps the title text — spaces
+  /// included — only stripping characters illegal in filenames).
+  /// v1.0.6: spaces MUST be kept — dropping them made the key
+  /// ("عمركسألتنفسك") never match the filename ("عمرك سألت…").
+  static String _titleKey(String title) {
+    final kept = title.replaceAll(RegExp(r'[/\\:*?"<>|\x00-\x1f]'), '');
+    return kept.length > 12 ? kept.substring(0, 12) : kept;
+  }
+
+  /// Shared by the 'done' event and the watchdog: mark finished,
+  /// move to history, clear the input for the next link.
+  void _finishItem(ActiveDownload item, String? filePath, int fileSize) {
+    item.status = DownloadStatus.done;
+    item.progress = 1;
+    item.filePath = filePath;
+    if (fileSize > 0) item.fileSizeBytes = fileSize;
+    active.remove(item);
+    _history.add(HistoryEntry(
+      id: item.id,
+      url: item.url,
+      title: item.title,
+      platform: item.platform,
+      qualityLabel: item.qualityLabel,
+      isAudioOnly: item.isAudioOnly,
+      date: DateTime.now(),
+      filePath: item.filePath ?? '',
+      fileSizeBytes: item.fileSizeBytes,
+    ));
+    _log.add(LogCategory.download,
+        'Finished: ${item.title} → ${item.filePath ?? ''}');
+    // Clear the input for the next link.
+    url = '';
+    formats = [];
+    selectedFormat = null;
+    videoTitle = '';
+    videoDurationSeconds = 0;
+    thumbnailUrl = '';
+    streamUrl = '';
+    notifyListeners();
+    unawaited(_pumpQueue());
   }
 
   Future<void> pause(String id) async {
@@ -278,24 +466,18 @@ class DownloadController extends ChangeNotifier {
       ),
     );
     item.status = DownloadStatus.downloading;
+    // v1.0.6: resume continues from the .part — the native side seeds
+    // the bar from the bytes already on disk, so it never drops back
+    // to 0%. The item's progress is kept as-is until the first new
+    // progress event arrives.
+    item.resumeCount++;
     _log.add(LogCategory.download,
         'Resuming (continues from the same point): ${item.title}');
     notifyListeners();
-    try {
-      await _engine.resumeDownload(
-        id: id,
-        url: item.url,
-        formatId: format.id,
-        audioOnly: item.isAudioOnly,
-      );
-    } catch (e) {
-      item.status = DownloadStatus.error;
-      // v1.0.5: generic message on screen, sanitized text in the log.
-      item.error = SettingsService.instance.tr('download_failed');
-      _log.error(LogCategory.download, 'Resume failed',
-          EngineService.sanitizeEngineText(e.toString()));
-      notifyListeners();
-    }
+    await _runEngine(item, format.id, format.isAudioOnly,
+        expectedTotalBytes: format.sizeBytes,
+        title: item.title,
+        resume: true);
   }
 
   Future<void> cancel(String id) async {
@@ -314,37 +496,15 @@ class DownloadController extends ChangeNotifier {
     final id = event['id'] as String?;
     final item = id == null ? null : _find(id);
     if (item == null) return;
+    // v1.0.6: every event refreshes the watchdog clock.
+    item.lastEventAt = DateTime.now();
     final status = event['status'] as String?;
     if (status == 'done') {
-      item.status = DownloadStatus.done;
-      item.progress = 1;
-      item.filePath = event['filePath'] as String?;
-      item.fileSizeBytes =
-          (event['fileSizeBytes'] as num?)?.toInt() ?? item.fileSizeBytes;
-      active.remove(item);
-      _history.add(HistoryEntry(
-        id: item.id,
-        url: item.url,
-        title: item.title,
-        platform: item.platform,
-        qualityLabel: item.qualityLabel,
-        isAudioOnly: item.isAudioOnly,
-        date: DateTime.now(),
-        filePath: item.filePath ?? '',
-        fileSizeBytes: item.fileSizeBytes,
-      ));
-      _log.add(LogCategory.download,
-          'Finished: ${item.title} → ${item.filePath ?? ''}');
-      // Clear the input for the next link.
-      url = '';
-      formats = [];
-      selectedFormat = null;
-      videoTitle = '';
-      videoDurationSeconds = 0;
-      thumbnailUrl = '';
-      streamUrl = '';
-      notifyListeners();
-      _pumpQueue();
+      _finishItem(
+        item,
+        event['filePath'] as String?,
+        (event['fileSizeBytes'] as num?)?.toInt() ?? 0,
+      );
       return;
     }
     if (status == 'error') {
@@ -374,16 +534,20 @@ class DownloadController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> openFile(String path) async {
-    if (path.isEmpty) return;
+  /// v1.0.6: returns false when the file is gone or no app could
+  /// open it — the caller shows a clear message instead of silently
+  /// doing nothing (the 2026-11-11 field report: "open" did nothing).
+  Future<bool> openFile(String path) async {
+    if (path.isEmpty) return false;
     final file = File(path);
     if (!await file.exists()) {
       _log.error(LogCategory.storage, 'File not found', path);
-      return;
+      return false;
     }
     final ok = await _engine.openFile(path);
     _log.add(LogCategory.storage,
         ok ? 'Opened file: $path' : 'No app could open: $path');
+    return ok;
   }
 
   Future<void> redownload(HistoryEntry entry) async {
@@ -529,6 +693,8 @@ class DownloadController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _watchdog?.cancel();
+    _watchdog = null;
     _progressSub?.cancel();
     super.dispose();
   }

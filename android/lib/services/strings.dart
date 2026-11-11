@@ -68,6 +68,9 @@ class AppStrings {
       'hist_empty_body':
           'Finished downloads will show up here with their quality, size and date.',
       'hist_open': 'Open',
+      // v1.0.6: shown when the history entry points at a file that is
+      // no longer on the device (instead of silently doing nothing).
+      'file_not_found': 'File not found on this device',
       'hist_again': 'Again',
       'hist_delete': 'Delete',
       'hist_delete_title': 'Delete from history?',
@@ -257,6 +260,9 @@ class AppStrings {
       'hist_empty_body':
           'ستظهر التحميلات المنتهية هنا مع الجودة والحجم والتاريخ.',
       'hist_open': 'فتح',
+      // v1.0.6: تظهر عندما يشير عنصر السجل إلى ملف لم يعد موجودًا على
+      // الجهاز (بدلًا من عدم فعل أي شيء بصمت).
+      'file_not_found': 'الملف مش موجود على الجهاز',
       'hist_again': 'مجددًا',
       'hist_delete': 'حذف',
       'hist_delete_title': 'حذف من السجل؟',

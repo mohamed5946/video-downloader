@@ -50,6 +50,10 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val VPN_REQUEST_CODE = 9001
+        // v1.0.6: kill a download process that emits no output lines
+        // for this long (stuck merge / stalled transfer) instead of
+        // leaving the card at 100% forever.
+        private const val WATCHDOG_SILENCE_MS = 5 * 60 * 1000L
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -147,7 +151,19 @@ class MainActivity : FlutterActivity() {
                         val url = call.argument<String>("url") ?: ""
                         val formatId = call.argument<String>("formatId") ?: "best"
                         val audioOnly = call.argument<Boolean>("audioOnly") ?: false
-                        Thread { runDownload(id, url, formatId, audioOnly, result) }.start()
+                        // v1.0.6: expected total bytes (video+audio) for
+                        // overall progress, and the title for matching
+                        // files already on disk (resume seeding).
+                        val expectedTotalBytes =
+                            (call.argument<Number>("expectedTotalBytes")
+                                ?.toLong()) ?: 0L
+                        val title = call.argument<String>("title") ?: ""
+                        Thread {
+                            runDownload(
+                                id, url, formatId, audioOnly,
+                                expectedTotalBytes, title, result
+                            )
+                        }.start()
                     }
                     "pauseDownload" -> {
                         val id = call.argument<String>("id") ?: ""
@@ -499,8 +515,44 @@ class MainActivity : FlutterActivity() {
         url: String,
         formatId: String,
         audioOnly: Boolean,
+        expectedTotalBytes: Long,
+        title: String,
         result: MethodChannel.Result
     ) {
+        // v1.0.6: the native silence watchdog — if the download process
+        // stops emitting output lines for 5 minutes (the 2026-11-11
+        // field case: stuck at 100% with no done/error event), kill it
+        // so the Dart side gets an error instead of waiting forever.
+        // A normal download emits a line at least every second while
+        // data flows; a merge of a short video takes seconds.
+        val lastLineAt = java.util.concurrent.atomic.AtomicLong(
+            System.currentTimeMillis()
+        )
+        @Volatile
+        var finished = false
+        val watchdogCancelled = java.util.Collections.synchronizedSet(
+            mutableSetOf<String>()
+        )
+        val watchdog = Thread {
+            while (!finished) {
+                try {
+                    Thread.sleep(10_000)
+                } catch (_: InterruptedException) {
+                    break
+                }
+                if (finished) break
+                if (System.currentTimeMillis() - lastLineAt.get() >
+                    WATCHDOG_SILENCE_MS
+                ) {
+                    watchdogCancelled.add(id)
+                    try {
+                        YoutubeDL.destroyProcessById(id)
+                    } catch (_: Exception) {
+                    }
+                    break
+                }
+            }
+        }.apply { isDaemon = true; start() }
         try {
             val request = YoutubeDLRequest(url)
             if (audioOnly) {
@@ -519,15 +571,48 @@ class MainActivity : FlutterActivity() {
                 "-o",
                 downloadDir().absolutePath + "/%(title)s.%(ext)s"
             )
+            // v1.0.6: overall progress across phases (video → audio →
+            // merge) from bytes on disk, seeded from any .part / final
+            // files already there — so a resume shows its real
+            // position at once instead of dropping to 0%.
+            val tracker = DownloadProgressTracker(
+                expectedTotalBytes, title, downloadDir()
+            )
+            val seed = tracker.initialOverall()
+            if (seed > 0) {
+                postEvent(mapOf(
+                    "id" to id,
+                    "status" to "progress",
+                    "progress" to seed * 100.0,
+                    "etaSeconds" to -1L,
+                    "speed" to ""
+                ))
+            }
             val response = YoutubeDL.execute(
                 request,
                 processId = id,
                 callback = { progress, eta, line ->
-                    postProgress(id, progress, eta, line)
+                    lastLineAt.set(System.currentTimeMillis())
+                    postProgress(id, progress, eta, line, tracker)
                 }
             )
+            finished = true
             val filePath = findOutputFile(response.out)
             val size = filePath?.let { File(it).let { f -> if (f.exists()) f.length() else 0L } } ?: 0L
+            // v1.0.6: tell the system about the new file right away so
+            // it shows in the Gallery immediately (the 2026-11-11 field
+            // report: the file was in Downloads but not in the Gallery).
+            if (filePath != null) {
+                try {
+                    android.media.MediaScannerConnection.scanFile(
+                        applicationContext,
+                        arrayOf(filePath),
+                        null,
+                        null
+                    )
+                } catch (_: Exception) {
+                }
+            }
             postEvent(mapOf(
                 "id" to id,
                 "status" to "done",
@@ -536,10 +621,23 @@ class MainActivity : FlutterActivity() {
             ))
             mainHandler.post { result.success(true) }
         } catch (e: YoutubeDL.CanceledException) {
-            // Paused or cancelled by the user — Dart already updated the UI.
-            postEvent(mapOf("id" to id, "status" to "cancelled"))
-            mainHandler.post { result.success(false) }
+            finished = true
+            if (watchdogCancelled.contains(id)) {
+                // Killed by the silence watchdog, not by the user —
+                // report an error so the card does not stay "paused".
+                postEvent(mapOf(
+                    "id" to id,
+                    "status" to "error",
+                    "error" to "Download stalled"
+                ))
+                mainHandler.post { result.success(false) }
+            } else {
+                // Paused or cancelled by the user — Dart already updated the UI.
+                postEvent(mapOf("id" to id, "status" to "cancelled"))
+                mainHandler.post { result.success(false) }
+            }
         } catch (e: Exception) {
+            finished = true
             // v1.0.5: sanitize — the raw message can carry extractor
             // naming; the Dart side shows a generic message for it.
             postEvent(mapOf(
@@ -548,36 +646,179 @@ class MainActivity : FlutterActivity() {
                 "error" to sanitizeText(e.message ?: "Download failed")
             ))
             mainHandler.post { result.success(false) }
+        } finally {
+            finished = true
         }
     }
 
-    private fun postProgress(id: String, progress: Float, eta: Long, line: String) {
+    private fun postProgress(
+        id: String,
+        progress: Float,
+        eta: Long,
+        line: String,
+        tracker: DownloadProgressTracker? = null
+    ) {
         val speed = Regex("""(\d+(?:\.\d+)?\s*(?:KiB|MiB|GiB)/s)""")
             .find(line)?.groupValues?.getOrNull(1) ?: ""
+        // v1.0.6: overall progress from the tracker (bytes on disk);
+        // null keeps the previous value (e.g. extraction lines).
+        // The event carries 0..100 — the Dart side divides by 100.
+        val overall = tracker?.onLine(line, progress)
+        val pct01 = overall ?: run {
+            if (progress < 0) return
+            (progress / 100.0).coerceIn(0.0, 1.0)
+        }
         postEvent(mapOf(
             "id" to id,
             "status" to "progress",
-            "progress" to progress.toDouble(),
+            "progress" to pct01 * 100.0,
             "etaSeconds" to eta,
             "speed" to speed
         ))
+    }
+
+    /**
+     * v1.0.6: overall download progress from bytes actually on disk.
+     * The raw progress lines are per-file, so a bestvideo+bestaudio
+     * download restarts the bar at 0% when the audio file starts —
+     * the field "resume starts from zero" report. Tracking bytes on
+     * disk across phases (and seeding from existing .part / final
+     * files on resume) makes the bar monotonic and true.
+     */
+    private class DownloadProgressTracker(
+        private val expectedTotalBytes: Long,
+        title: String,
+        private val dir: File,
+    ) {
+        // v1.0.6: first characters of the title as they appear in the
+        // saved filename — spaces KEPT (dropping them made the key
+        // never match filenames like "عمرك سألت…").
+        private val titleKey: String = title.filter {
+            it !in "/\\:*?\"<>|" && it.code >= 0x20
+        }.take(12)
+        private var completedBytes = 0L
+        private var currentTotal = 0L
+        private var currentDownloaded = 0L
+
+        private val destRe = Regex("""\[download\] Destination: (.+)""")
+        private val alreadyRe =
+            Regex("""\[download\] (.+) has already been downloaded""")
+        private val pctRe = Regex(
+            """\[download\]\s+(\d+(?:\.\d+)?)% of\s+(\d+(?:\.\d+)?)\s*(KiB|MiB|GiB|B)"""
+        )
+
+        init {
+            seedFromDisk()
+        }
+
+        private fun matches(f: File): Boolean =
+            titleKey.length >= 6 && f.name.contains(titleKey)
+
+        private fun seedFromDisk() {
+            val files = try {
+                dir.listFiles() ?: return
+            } catch (_: Exception) {
+                return
+            }
+            for (f in files) {
+                if (!f.isFile || !matches(f)) continue
+                if (f.name.endsWith(".part")) {
+                    currentDownloaded += f.length()
+                } else {
+                    completedBytes += f.length()
+                }
+            }
+        }
+
+        /** Overall progress 0..1 right now (seeded from disk). */
+        fun initialOverall(): Double {
+            if (expectedTotalBytes <= 0) return 0.0
+            return ((completedBytes + currentDownloaded).toDouble() /
+                expectedTotalBytes).coerceIn(0.0, 1.0)
+        }
+
+        /**
+         * Feed one output line. Returns overall progress 0..1, or null
+         * when this line carries no progress information (keep the
+         * previous value).
+         */
+        fun onLine(line: String, rawPct: Float): Double? {
+            destRe.find(line)?.let {
+                // A new file starts: the previous file, if it reached
+                // its total, counts as complete.
+                if (currentTotal > 0 && currentDownloaded >= currentTotal) {
+                    completedBytes += currentTotal
+                }
+                currentTotal = 0L
+                currentDownloaded = 0L
+                return overall(rawPct)
+            }
+            alreadyRe.find(line)?.let { m ->
+                val f = File(m.groupValues[1].trim())
+                if (f.exists()) completedBytes += f.length()
+                return overall(rawPct)
+            }
+            pctRe.find(line)?.let { m ->
+                val pct = m.groupValues[1].toDoubleOrNull()
+                    ?: return overall(rawPct)
+                val total = parseSize(m.groupValues[2], m.groupValues[3])
+                if (total > 0) {
+                    currentTotal = total
+                    currentDownloaded = (pct / 100.0 * total).toLong()
+                }
+                return overall(rawPct)
+            }
+            return overall(rawPct)
+        }
+
+        private fun overall(rawPct: Float): Double? {
+            if (expectedTotalBytes <= 0) {
+                return if (rawPct < 0) null
+                else (rawPct / 100.0).coerceIn(0.0, 1.0)
+            }
+            return ((completedBytes + currentDownloaded).toDouble() /
+                expectedTotalBytes).coerceIn(0.0, 1.0)
+        }
+
+        private fun parseSize(value: String, unit: String): Long {
+            val v = value.toDoubleOrNull() ?: return 0L
+            val mult = when (unit) {
+                "KiB" -> 1024L
+                "MiB" -> 1024L * 1024L
+                "GiB" -> 1024L * 1024L * 1024L
+                else -> 1L
+            }
+            return (v * mult).toLong()
+        }
     }
 
     private fun postEvent(event: Map<String, Any>) {
         mainHandler.post { eventSink?.success(event) }
     }
 
-    /** Parse the final output file from yt-dlp's log lines. */
+    /**
+     * Parse the final output file from yt-dlp's log lines.
+     *
+     * v1.0.6: the Merger output FIRST — the old order checked
+     * "[download] Destination:" first, which for a merged
+     * bestvideo+bestaudio download is the intermediate video-only
+     * file that yt-dlp DELETES after merging, so history pointed at
+     * a deleted file and "open" did nothing (2026-11-11 field
+     * report). Every candidate must exist and be non-empty.
+     */
     private fun findOutputFile(out: String): String? {
-        val dest = Regex("""\[download\] Destination: (.+)""")
-            .find(out)?.groupValues?.getOrNull(1)?.trim()
-        if (dest != null) return dest
         val merged = Regex("""\[Merger\] Merging formats into "(.+)"""")
             .find(out)?.groupValues?.getOrNull(1)?.trim()
+            ?.takeIf { File(it).let { f -> f.exists() && f.length() > 0 } }
         if (merged != null) return merged
         val audio = Regex("""\[ExtractAudio\] Destination: (.+)""")
             .find(out)?.groupValues?.getOrNull(1)?.trim()
+            ?.takeIf { File(it).let { f -> f.exists() && f.length() > 0 } }
         if (audio != null) return audio
+        val dest = Regex("""\[download\] Destination: (.+)""")
+            .find(out)?.groupValues?.getOrNull(1)?.trim()
+            ?.takeIf { File(it).let { f -> f.exists() && f.length() > 0 } }
+        if (dest != null) return dest
         // Fallback: newest file in the download folder.
         return downloadDir().listFiles()
             ?.filter { it.isFile && !it.name.endsWith(".part") }

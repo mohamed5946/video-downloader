@@ -155,7 +155,20 @@ class _HistoryCard extends StatelessWidget {
                   label: settings.tr('hist_open'),
                   icon: Icons.play_circle_outline_rounded,
                   compact: true,
-                  onPressed: () => controller.openFile(entry.filePath),
+                  // v1.0.6: opening a missing file says so instead of
+                  // silently doing nothing (2026-11-11 field report).
+                  onPressed: () async {
+                    final ok =
+                        await controller.openFile(entry.filePath);
+                    if (!ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content:
+                              Text(settings.tr('file_not_found')),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ),
               const SizedBox(width: 8),

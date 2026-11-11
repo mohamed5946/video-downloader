@@ -97,9 +97,12 @@ void main() {
   });
 
   group('fetchInfo FORMATS handling', () {
-    // NOTE: EngineService is a singleton — the update-once flag is
-    // per session. The failure test runs first (its update attempt
-    // fails, so the flag stays clear); the retry test runs second.
+    // NOTE: EngineService is a singleton — the retry check is
+    // timestamp-based (v1.0.6): a retry happens when an update
+    // completed during the fetch, even if an update already ran
+    // earlier in the session. The failure test runs first (its
+    // update attempts fail, so no update timestamp is recorded);
+    // the retry test runs second.
     setUp(() {
       LogService.instance.clear();
     });

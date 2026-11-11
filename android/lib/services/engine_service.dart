@@ -46,11 +46,19 @@ class EngineService {
   String _engineVersion = '';
   StreamSubscription? _sub;
 
-  // v1.0.5: guard concurrent tool updates, and remember whether the
-  // updater already reached its server this session (a second attempt
-  // after an up-to-date answer would fail the same way again).
+  // v1.0.6: when a NEW tool version was installed this session
+  // (epoch ms, 0 = none). A fetch that started before that moment ran
+  // with the old tool, so a FORMATS failure after it deserves one
+  // retry with the new tool — the v1.0.5 session flag blocked exactly
+  // that retry (the background update finished while the fetch was
+  // running, the fetch failed on the old tool, and no retry happened).
+  int _lastToolUpdateDoneMs = 0;
+  // v1.0.6: the first-run update, shared while it runs (init and the
+  // update path must never start two of them).
+  Future<ToolUpdateResult>? _firstRunUpdateFuture;
+
+  /// Concurrent updateTool() callers share one attempt.
   Future<ToolUpdateResult>? _toolUpdateRunning;
-  bool _toolUpdateAttempted = false;
 
   bool get initialized => _initialized;
   String get engineVersion => _engineVersion;
@@ -116,9 +124,20 @@ class EngineService {
         _initialized = true;
         LogService.instance.add(
             LogCategory.engine, 'Download service ready');
-        // v1.0.5: background tool update — first run ever, then weekly.
-        // Fire-and-forget: never blocks startup or the first download.
-        unawaited(maybeAutoUpdateTool());
+        // v1.0.6: FRESH INSTALL — finish the tool update BEFORE the
+        // first fetch runs, so the first paste works out of the box
+        // (v1.0.5 raced the update against the first fetch and the
+        // first paste failed). Awaits at most ~90s (the update call's
+        // own timeout); offline/failure falls back to the bundled
+        // version and the user is never blocked.
+        // Later runs keep the weekly background cadence.
+        if (SettingsService.instance.toolLastCheckMs <= 0) {
+          await _firstRunUpdate();
+        } else {
+          // v1.0.5: background tool update — first run ever, then weekly.
+          // Fire-and-forget: never blocks startup or the first download.
+          unawaited(maybeAutoUpdateTool());
+        }
         return true;
       } on MissingPluginException {
         LogService.instance.error(LogCategory.engine, 'Download service unavailable',
@@ -182,6 +201,9 @@ class EngineService {
       throw Exception(SettingsService.instance.tr('engine_unavailable'));
     }
     log.add(LogCategory.engine, 'Getting video info', url);
+    // v1.0.6: the moment this fetch started — a tool update that
+    // lands after it means the fetch ran on the old tool.
+    final fetchStartMs = DateTime.now().millisecondsSinceEpoch;
     try {
       final info = await _fetchInfoOnce(url);
       if (info != null) return info;
@@ -191,7 +213,7 @@ class EngineService {
         // The log records the code only; the raw message never reaches
         // the log or the UI.
         log.error(LogCategory.engine, 'Could not get video info', 'FORMATS');
-        if (await _updateToolOnce()) {
+        if (await _updateToolOnce(sinceMs: fetchStartMs)) {
           try {
             final retried = await _fetchInfoOnce(url);
             if (retried != null) return retried;
@@ -239,16 +261,28 @@ class EngineService {
     );
   }
 
-  /// Update the download tool at most once per session from the fetch
-  /// path. Returns true only when a NEW tool version was installed —
-  /// only then is retrying the fetch worthwhile (an up-to-date tool
-  /// would fail the same way again; a failed update leaves the
-  /// bundled version in place, so the next fetch may try again).
-  Future<bool> _updateToolOnce() async {
-    if (_toolUpdateAttempted) return false;
+  /// One retry-update after a FORMATS failure, then one retry-fetch.
+  /// Returns true when retrying the fetch is worthwhile:
+  /// - the update just installed a NEW tool version, or
+  /// - a tool update landed while this fetch was running (the fetch
+  ///   ran on the old tool — the v1.0.5 field case: the background
+  ///   update finished mid-fetch and the retry was skipped).
+  /// No retry when the tool was already current before the fetch (an
+  /// up-to-date tool would fail the same way again) or when the
+  /// update itself failed (bundled version stays; the next fetch may
+  /// try again). At most one retry per fetch call.
+  Future<bool> _updateToolOnce({required int sinceMs}) async {
     final result = await updateTool();
-    if (result != ToolUpdateResult.failed) _toolUpdateAttempted = true;
-    return result == ToolUpdateResult.done;
+    if (result == ToolUpdateResult.done) return true;
+    return _lastToolUpdateDoneMs >= sinceMs;
+  }
+
+  /// v1.0.6: the fresh-install update — awaited by init() before the
+  /// first fetch, so the first paste works out of the box. Shared
+  /// while running; capped by the update call's own ~90s timeout.
+  Future<ToolUpdateResult> _firstRunUpdate() {
+    _firstRunUpdateFuture ??= updateTool();
+    return _firstRunUpdateFuture!;
   }
 
   /// Background cadence: first run ever, then at most once a week.
@@ -286,13 +320,12 @@ class EngineService {
           .timeout(const Duration(seconds: 90));
       final status = res?['status'];
       if (status == 'done') {
-        _toolUpdateAttempted = true;
+        _lastToolUpdateDoneMs = DateTime.now().millisecondsSinceEpoch;
         await SettingsService.instance.setToolLastCheck(DateTime.now());
         log.add(LogCategory.update, 'Download tool updated');
         return ToolUpdateResult.done;
       }
       if (status == 'up_to_date') {
-        _toolUpdateAttempted = true;
         await SettingsService.instance.setToolLastCheck(DateTime.now());
         log.add(LogCategory.update, 'Download tool already up to date');
         return ToolUpdateResult.upToDate;
@@ -384,6 +417,44 @@ class EngineService {
 
     final options = <FormatOption>[];
 
+    // v1.0.6: byte totals for overall progress (video + audio). A
+    // total counts only when every part is known (>0); otherwise the
+    // native side falls back to per-file progress.
+    int? fileSizeOf(Map<String, dynamic> f) {
+      final s = (f['filesize'] as num?) ?? (f['filesize_approx'] as num?);
+      return s == null ? null : s.toInt();
+    }
+
+    int? bestVideoBytes;
+    for (final f in video) {
+      final s = fileSizeOf(f);
+      if (s != null && (bestVideoBytes == null || s > bestVideoBytes)) {
+        bestVideoBytes = s;
+      }
+    }
+    int? bestAudioBytes;
+    int? worstVideoBytes;
+    int? worstAudioBytes;
+    for (final f in video) {
+      final s = fileSizeOf(f);
+      if (s != null &&
+          (worstVideoBytes == null || s < worstVideoBytes)) {
+        worstVideoBytes = s;
+      }
+    }
+    for (final f in audio) {
+      final s = fileSizeOf(f);
+      if (s != null && (bestAudioBytes == null || s > bestAudioBytes)) {
+        bestAudioBytes = s;
+      }
+      if (s != null &&
+          (worstAudioBytes == null || s < worstAudioBytes)) {
+        worstAudioBytes = s;
+      }
+    }
+    int mergedBytes(int? v, int? a) =>
+        (v != null && v > 0 && a != null && a > 0) ? v + a : 0;
+
     // Highest: best video+audio merged.
     options.add(FormatOption(
       id: 'bestvideo+bestaudio/best',
@@ -392,6 +463,7 @@ class EngineService {
       isAudioOnly: false,
       height: 4320,
       sizeText: '—',
+      sizeBytes: mergedBytes(bestVideoBytes, bestAudioBytes),
     ));
 
     // Per-height best options: 2160 / 1080 / 720 / 480 / 360.
@@ -418,6 +490,7 @@ class EngineService {
         isAudioOnly: false,
         height: h,
         sizeText: sizeText(f),
+        sizeBytes: mergedBytes(fileSizeOf(f), bestAudioBytes),
       ));
     }
 
@@ -429,6 +502,7 @@ class EngineService {
       isAudioOnly: false,
       height: 144,
       sizeText: '—',
+      sizeBytes: mergedBytes(worstVideoBytes, worstAudioBytes),
     ));
 
     // Audio-only MP3.
@@ -440,50 +514,66 @@ class EngineService {
         isAudioOnly: true,
         height: 0,
         sizeText: '—',
+        sizeBytes: bestAudioBytes ?? 0,
       ));
     }
     return options;
   }
 
-  Future<void> startDownload({
+  /// v1.0.6: returns true when the native call reported the download
+  /// finished (the native side also posts a 'done' event; the
+  /// controller treats a true result as completion even if that event
+  /// was lost — the v1.0.5 field bug where a finished download stayed
+  /// stuck at 100% forever).
+  Future<bool> startDownload({
     required String id,
     required String url,
     required String formatId,
     required bool audioOnly,
+    int expectedTotalBytes = 0,
+    String title = '',
   }) async {
     // v1.0.1: lazy start — the download service only starts when a real
     // download begins, never at app launch.
     if (!await init()) {
       throw Exception(SettingsService.instance.tr('engine_unavailable'));
     }
-    await _method.invokeMethod('startDownload', {
+    final ok = await _method.invokeMethod<bool>('startDownload', {
       'id': id,
       'url': url,
       'formatId': formatId,
       'audioOnly': audioOnly,
+      'expectedTotalBytes': expectedTotalBytes,
+      'title': title,
     });
+    return ok ?? false;
   }
 
   Future<void> pauseDownload(String id) async {
     await _method.invokeMethod('pauseDownload', {'id': id});
   }
 
-  Future<void> resumeDownload({
+  Future<bool> resumeDownload({
     required String id,
     required String url,
     required String formatId,
     required bool audioOnly,
+    int expectedTotalBytes = 0,
+    String title = '',
   }) async {
     // v1.0.1: lazy start — same guard as startDownload.
     if (!await init()) {
       throw Exception(SettingsService.instance.tr('engine_unavailable'));
     }
-    await _method.invokeMethod('resumeDownload', {
+    final ok = await _method.invokeMethod<bool>('resumeDownload', {
       'id': id,
       'url': url,
       'formatId': formatId,
       'audioOnly': audioOnly,
+      'expectedTotalBytes': expectedTotalBytes,
+      'title': title,
     });
+    return ok ?? false;
   }
 
   Future<void> cancelDownload(String id) async {

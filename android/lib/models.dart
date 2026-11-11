@@ -115,6 +115,7 @@ class FormatOption {
     required this.isAudioOnly,
     required this.height,
     required this.sizeText,
+    this.sizeBytes = 0,
   });
 
   final String id; // yt-dlp format selector, e.g. "137+140" or "best"
@@ -123,6 +124,12 @@ class FormatOption {
   final bool isAudioOnly;
   final int height; // 0 for audio / unknown
   final String sizeText;
+  // v1.0.6: total bytes of all files this option downloads (video +
+  // audio), 0 when any part is unknown. The native side uses it to
+  // show overall progress across phases (video → audio → merge)
+  // instead of restarting the bar at 0% for each file, and to seed
+  // the bar from existing .part files on resume.
+  final int sizeBytes;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -131,6 +138,7 @@ class FormatOption {
         'isAudioOnly': isAudioOnly,
         'height': height,
         'sizeText': sizeText,
+        'sizeBytes': sizeBytes,
       };
 
   factory FormatOption.fromJson(Map<String, dynamic> j) => FormatOption(
@@ -140,6 +148,7 @@ class FormatOption {
         isAudioOnly: j['isAudioOnly'] as bool,
         height: (j['height'] as num).toInt(),
         sizeText: j['sizeText'] as String,
+        sizeBytes: (j['sizeBytes'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -159,7 +168,9 @@ class ActiveDownload {
     this.filePath,
     this.fileSizeBytes = 0,
     this.error,
-  });
+    DateTime? startedAt,
+  }) : startedAt = startedAt ?? DateTime.now(),
+       lastEventAt = startedAt ?? DateTime.now();
 
   final String id;
   final String url;
@@ -174,6 +185,14 @@ class ActiveDownload {
   String? filePath;
   int fileSizeBytes;
   String? error;
+  // v1.0.6: completion watchdog — when the last progress event arrived
+  // (any event counts: progress, done, error) and when the download
+  // started (the folder check only trusts files newer than this).
+  final DateTime startedAt;
+  DateTime lastEventAt;
+  // v1.0.6: how many times this item was resumed (progress must never
+  // drop back to 0 on resume — it continues from the .part).
+  int resumeCount = 0;
 
   String get etaText {
     if (etaSeconds <= 0) return '--:--';
