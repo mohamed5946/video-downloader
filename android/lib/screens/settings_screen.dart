@@ -827,7 +827,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     }
   }
 
-  Future<void> _check() async {
+  Future<void> _runCheck() async {
     setState(() {
       _checking = true;
       _downloadedPath = null;
@@ -1154,7 +1154,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                           ? settings.tr('updates_checking')
                           : settings.tr('updates_check'),
                       icon: Icons.refresh_rounded,
-                      onPressed: _checking ? null : _check,
+                      onPressed: _checking ? null : _runCheck,
                     ),
                   ),
                   if (hasPending) ...[
