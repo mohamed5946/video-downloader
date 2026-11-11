@@ -12,6 +12,41 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:snapdl/main.dart';
 
+/// Locate the MaterialIcons font in the Flutter SDK. The SDK lives at a
+/// different path on every machine (and on CI), so resolve it from the
+/// `flutter` executable on PATH (or FLUTTER_ROOT) instead of a hardcoded
+/// author-machine path — the hardcoded path made setUpAll throw
+/// PathNotFoundException on the GitHub runner and fail the whole file.
+String _materialIconsPath() {
+  const file =
+      'bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf';
+  String? candidate(String sdkRoot) {
+    final path = '$sdkRoot/$file';
+    return File(path).existsSync() ? path : null;
+  }
+
+  final root = Platform.environment['FLUTTER_ROOT'];
+  if (root != null && root.isNotEmpty) {
+    final found = candidate(root);
+    if (found != null) return found;
+  }
+  try {
+    final result = Process.runSync('which', const ['flutter']);
+    if (result.exitCode == 0) {
+      final flutterBin =
+          File((result.stdout as String).trim()).resolveSymbolicLinksSync();
+      // <sdk>/bin/flutter -> <sdk>
+      final sdkRoot = File(flutterBin).parent.parent.path;
+      final found = candidate(sdkRoot);
+      if (found != null) return found;
+    }
+  } catch (_) {
+    // Fall through to the legacy path below.
+  }
+  // Last resort: the machine the test was first authored on.
+  return '/home/hatch/sdk/flutter/$file';
+}
+
 Future<void> _loadRealFonts() async {
   Future<ByteData> bytes(String path) async {
     final data = await File(path).readAsBytes();
@@ -27,8 +62,7 @@ Future<void> _loadRealFonts() async {
 
   // Material Icons ship with the Flutter SDK (not bundled in test assets).
   final materialIcons = FontLoader('MaterialIcons')
-    ..addFont(bytes(
-        '/home/hatch/sdk/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf'));
+    ..addFont(bytes(_materialIconsPath()));
   await materialIcons.load();
 }
 
