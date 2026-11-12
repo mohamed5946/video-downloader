@@ -786,7 +786,11 @@
     const card = $('updCard');
     if (!card) return;
     $('updVersionNew').textContent = 'SnapDL v' + res.version;
-    const size = res.sizeBytes || res.winSizeBytes || res.size || null;
+    // This renderer is the Windows app, so the Windows download size
+    // comes first: winSizeBytes is the bridge-ZIP size. sizeBytes is
+    // the Android APK size and must NOT be shown here (it used to
+    // display ~176 MB while the real Windows download is ~205 MB).
+    const size = res.winSizeBytes || res.sizeBytes || res.size || null;
     $('updSize').textContent = size ? fmtSize(size) : '—';
     const notes = $('updNotes');
     notes.textContent = res.notes || '';
