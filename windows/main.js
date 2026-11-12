@@ -1262,7 +1262,11 @@ ipcMain.handle('check-updates', async () => {
     }
     if (compareVersions(m.version, APP_VERSION) > 0) {
       log('UPDATE', `New version available: ${m.version} (current ${APP_VERSION}).`);
-      return { ok: true, update: true, version: m.version, notes: m.notes || '', url: m.url || RELEASES_URL };
+      // v1.0.8: forward the manifest sizes so the update card can show
+      // the download size (apkSizeBytes for Android, winSizeBytes for
+      // the Windows bridge ZIP). v1.0.7 never forwarded them, so its
+      // card showed no size — this only affects v1.0.8+.
+      return { ok: true, update: true, version: m.version, notes: m.notes || '', url: m.url || RELEASES_URL, sizeBytes: m.apkSizeBytes || 0, winSizeBytes: m.winSizeBytes || 0 };
     }
     log('UPDATE', `You are on the latest version (${APP_VERSION}).`);
     return { ok: true, update: false, version: APP_VERSION };
