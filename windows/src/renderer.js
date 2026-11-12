@@ -800,10 +800,15 @@
     setUpdProgress(0, 0, null);
     try {
       // v1.0.8: installed app — differential update via electron-updater;
-      // otherwise the legacy file download.
+      // otherwise the legacy file download. The legacy download keeps
+      // the URL's own type in the saved name: an installer URL must be
+      // saved as .exe or the system would treat it as a zip (v1.0.7
+      // always saved 'SnapDL-update.zip' — that is why the v1.0.8
+      // manifest points Windows at a ZIP containing the installer).
+      const isExe = /\.exe($|[?#])/i.test(res.url);
       const dl = res.viaUpdater && typeof api.downloadAppUpdate === 'function'
         ? await api.downloadAppUpdate()
-        : await api.downloadUpdate({ url: res.url, fileName: 'SnapDL-update.zip' });
+        : await api.downloadUpdate({ url: res.url, fileName: isExe ? 'SnapDL-update.exe' : 'SnapDL-update.zip' });
       if (!dl || !dl.ok) {
         toast(t('updates_download_failed') + (dl && dl.error ? ' ' + dl.error : ''));
         $('updProgressWrap').classList.add('hidden');
