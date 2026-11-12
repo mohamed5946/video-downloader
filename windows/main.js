@@ -512,7 +512,8 @@ function spawnDownload(job) {
       addHistory({
         id: job.id, title: job.title || job.url, platform: job.platform || 'Video',
         quality: job.quality,
-        url: job.url, path: job.outFile || '', size, date: new Date().toISOString(), status: 'done'
+        url: job.url, path: job.outFile || '', size, date: new Date().toISOString(), status: 'done',
+        thumbnail: job.thumbnail || null, duration: job.duration || null
       });
     } else {
       const reason = scrubEngineWords(stderrBuf.trim().split('\n').slice(-3).join(' ') || `Download failed with code ${code}`).slice(0, 300);
@@ -559,7 +560,8 @@ function completeJob(job, filePath) {
   addHistory({
     id: job.id, title: job.title || job.url, platform: job.platform || 'Video',
     quality: job.quality,
-    url: job.url, path: job.outFile || '', size, date: new Date().toISOString(), status: 'done'
+    url: job.url, path: job.outFile || '', size, date: new Date().toISOString(), status: 'done',
+    thumbnail: job.thumbnail || null, duration: job.duration || null
   });
   sendJobList();
   finishJob(job);
@@ -683,7 +685,8 @@ async function runFileDownload(job) {
     log('DOWNLOAD', `Finished: ${job.title} (${humanSize(size)})`);
     addHistory({
       id: job.id, title: job.title, platform: 'File', quality: 'file',
-      url: job.url, path: target, size, date: new Date().toISOString(), status: 'done'
+      url: job.url, path: target, size, date: new Date().toISOString(), status: 'done',
+      thumbnail: null, duration: null
     });
     sendJobList();
     finishJob(job);
@@ -711,7 +714,7 @@ async function isOnWifi() {
   });
 }
 
-async function startJob({ url, quality, kind }) {
+async function startJob({ url, quality, kind, title, platform, thumbnail, duration }) {
   await ensureToolReady(); // first run: finish the tool update before the first download
   const settings = loadSettings();
   if (settings.wifiOnly) {
@@ -731,7 +734,12 @@ async function startJob({ url, quality, kind }) {
     id: ++jobSeq, url, quality: quality || settings.defaultQuality || 'highest', outDir,
     kind: isFile ? 'file' : 'video',
     status: 'starting', progress: 0, speed: '', eta: '', phase: 'starting',
-    title: '', platform: '', outFile: ''
+    // v1.0.8: the download page passes the fetched video info so the
+    // history card can render like the preview card (thumbnail, title,
+    // duration). Extension / watch-tab jobs have no info — they keep
+    // empty metadata and the card shows a placeholder instead.
+    title: title || '', platform: platform || '', outFile: '',
+    thumbnail: thumbnail || null, duration: duration || null
   };
   if (isFile) {
     job.fileName = fileNameFromUrl(url);
@@ -1423,7 +1431,7 @@ const PREVIEW_STATE = {
     title: 'Big Buck Bunny — 4K 60fps Official Trailer (Sample)', platform: 'YouTube'
   },
   history: [
-    { id: 101, title: 'Big Buck Bunny — 4K 60fps Official Trailer', platform: 'YouTube', quality: '1080p', url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', path: 'C:\\Users\\DELL\\Downloads\\SnapDL\\Big Buck Bunny.mp4', size: 191526400, date: new Date(Date.now() - 1000 * 60 * 42).toISOString(), status: 'done' },
+    { id: 101, title: 'Big Buck Bunny — 4K 60fps Official Trailer', platform: 'YouTube', quality: '1080p', url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', path: 'C:\\Users\\DELL\\Downloads\\SnapDL\\Big Buck Bunny.mp4', size: 191526400, date: new Date(Date.now() - 1000 * 60 * 42).toISOString(), status: 'done', thumbnail: 'sample-thumb.png', duration: 596 },
     { id: 102, title: 'TikTok — funny cat compilation (no watermark)', platform: 'TikTok', quality: 'highest', url: 'https://www.tiktok.com/@example/video/7000000000000000000', path: 'C:\\Users\\DELL\\Downloads\\SnapDL\\funny cat.mp4', size: 12450000, date: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), status: 'done' },
     { id: 103, title: 'Neso Academy — Linear Algebra Lec 4', platform: 'YouTube', quality: 'audio', url: 'https://www.youtube.com/watch?v=example3', path: 'C:\\Users\\DELL\\Downloads\\SnapDL\\Linear Algebra Lec 4.mp3', size: 18200000, date: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), status: 'done' },
     { id: 104, title: 'Instagram Reel — Cairo street food tour', platform: 'Instagram', quality: '720p', url: 'https://www.instagram.com/reel/example4', path: 'C:\\Users\\DELL\\Downloads\\SnapDL\\Cairo street food.mp4', size: 48200000, date: new Date(Date.now() - 1000 * 60 * 60 * 49).toISOString(), status: 'done' }

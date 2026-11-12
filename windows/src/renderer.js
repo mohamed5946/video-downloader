@@ -554,7 +554,16 @@
     if (!url) { toast(t('toastPasteFirst')); return; }
     const btn = $('downloadBtn');
     btn.disabled = true;
-    const res = await api.startDownload({ url, quality: selectedQuality });
+    // v1.0.8: pass the fetched video info so the history card can
+    // render like the preview card — but only when the info belongs to
+    // THIS link (a stale preview from an earlier link must not attach
+    // its thumbnail/title to the new download).
+    const info = (currentInfo && currentInfo.url === url) ? currentInfo : null;
+    const res = await api.startDownload({
+      url, quality: selectedQuality,
+      title: (info && info.title) || '', platform: (info && info.platform) || '',
+      thumbnail: (info && info.thumbnail) || null, duration: (info && info.duration) || null
+    });
     btn.disabled = false;
     if (!res.ok) toast(res.error || t('toastStartFail'));
     else if (res.queued) toast(t('toastQueued'));
@@ -611,7 +620,6 @@
   api.onDownloadList(list => renderJobs(list));
 
   // ================= history =================
-  const PLATFORM_ICON = { YouTube: '▶', TikTok: '♪', Instagram: '▣', Facebook: 'f', 'X (Twitter)': '𝕏' };
   function renderHistory() {
     const list = $('historyList');
     const empty = $('historyEmpty');
@@ -619,26 +627,42 @@
     $('historyCountLabel').textContent = history.length ? t('histCount', { n: history.length }) : '';
     if (!history.length) { list.innerHTML = ''; empty.classList.remove('hidden'); return; }
     empty.classList.add('hidden');
+    // v1.0.8: each history item looks like the Download-page preview
+    // card — same .preview-thumb (thumbnail + play overlay + duration)
+    // and .preview-info (title, platform badge, quality, size, date),
+    // with the existing فتح / إعادة التنزيل / حذف buttons below the
+    // details. Entries without a stored thumbnail (older downloads,
+    // extension / watch-tab jobs) show a placeholder, never a broken
+    // image. The play overlay opens the file exactly like فتح, through
+    // the verified-path Open handler in main.js.
     list.innerHTML = history.map(h => `
       <div class="history-item" data-id="${h.id}">
-        <div class="hist-ic">${PLATFORM_ICON[h.platform] || '↓'}</div>
-        <div class="hist-main">
-          <div class="hist-title">${esc(h.title)}</div>
-          <div class="hist-meta"><span class="badge">${esc(platformLabel(h.platform))}</span><span>${esc(qualityLabel(h.quality))}</span><span>${fmtSize(h.size)}</span><span>${fmtDate(h.date)}</span></div>
+        <div class="preview-thumb hist-thumb">
+          ${h.thumbnail ? `<img src="${esc(h.thumbnail)}" alt="">` : `<div class="hist-thumb-ph"><span>▶</span></div>`}
+          <button class="preview-play" data-act="play" title="${esc(t('histOpen'))}">▶</button>
+          ${h.duration ? `<span class="preview-duration">${fmtDuration(h.duration)}</span>` : ''}
         </div>
-        <div class="hist-actions">
-          <button class="glass-btn" data-act="open">${t('histOpen')}</button>
-          <button class="glass-btn" data-act="redownload">↻ ${t('histAgain')}</button>
-          <button class="btn-danger-ghost" data-act="delete">${t('histDelete')}</button>
+        <div class="preview-info">
+          <div class="preview-title">${esc(h.title)}</div>
+          <div class="preview-meta"><span class="badge">${esc(platformLabel(h.platform))}</span><span>${esc(qualityLabel(h.quality))}</span><span>${fmtSize(h.size)}</span><span>${fmtDate(h.date)}</span></div>
+          <div class="hist-actions">
+            <button class="glass-btn" data-act="open">${t('histOpen')}</button>
+            <button class="glass-btn" data-act="redownload">↻ ${t('histAgain')}</button>
+            <button class="btn-danger-ghost" data-act="delete">${t('histDelete')}</button>
+          </div>
         </div>
       </div>`).join('');
     list.querySelectorAll('.history-item').forEach(item => {
       const id = Number(item.dataset.id);
-      item.querySelector('[data-act="open"]').addEventListener('click', async () => {
+      // Play overlay = Open: the downloaded file in the system default
+      // player, via the verified-path handler (same as فتح).
+      const openEntry = async () => {
         const h = history.find(x => x.id === id);
         const res = await api.openFile(h && h.path);
         if (!res.ok) toast(res.error || t('toastFileNotFound'));
-      });
+      };
+      item.querySelector('[data-act="play"]').addEventListener('click', openEntry);
+      item.querySelector('[data-act="open"]').addEventListener('click', openEntry);
       item.querySelector('[data-act="redownload"]').addEventListener('click', async () => {
         const res = await api.redownload(id);
         if (res.ok) { showView('download'); toast(t('toastRedownloading')); }

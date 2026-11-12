@@ -288,22 +288,26 @@ input, select { font-family: inherit; }
 .history-count { font-size: 13px; color: var(--ink-dim); }
 .history-list { display: flex; flex-direction: column; gap: 10px; }
 .history-item {
-  display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 16px; padding: 16px 18px;
   background: var(--glass); border: 1px solid var(--stroke); border-radius: 18px;
   backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
   transition: transform .25s var(--ease), border-color .25s var(--ease);
 }
 .history-item:hover { transform: translateY(-1px); border-color: rgba(78,122,142,.5); }
-.hist-ic {
-  width: 42px; height: 42px; flex: none; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, rgba(78,122,142,.28), rgba(107,147,165,.28));
-  border: 1px solid rgba(78,122,142,.3); font-size: 17px;
+/* v1.0.8: history items reuse the preview-card look — the thumb is the
+   same .preview-thumb; long titles clamp to two lines instead of
+   overflowing the card. */
+.history-item .preview-thumb { flex: none; }
+.history-item .preview-title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.hist-main { flex: 1; min-width: 0; }
-.hist-title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hist-meta { margin-top: 4px; font-size: 12px; color: var(--ink-dim); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.hist-actions { display: flex; gap: 8px; flex: none; }
-.hist-actions button { padding: 8px 12px; font-size: 12.5px; }
+.history-item .preview-info { display: flex; flex-direction: column; }
+.hist-thumb-ph {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,.75); font-size: 34px;
+}
+.hist-actions { display: flex; gap: 8px; flex: none; margin-top: 14px; flex-wrap: wrap; }
 .empty-state { text-align: center; padding: 46px 20px; color: var(--ink-dim); }
 .empty-ic {
   width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 20px; font-size: 30px;

@@ -32,7 +32,12 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: SnapDL
   uninstallDisplayName: SnapDL
-  artifactName: ${productName} Setup ${version}.${ext}
+  # No spaces: electron-builder writes the file name into latest.yml
+  # with spaces replaced by hyphens, so a spaced artifactName makes
+  # the updater request a file that does not exist on the release
+  # (verified 2026-11-12: latest.yml said SnapDL-Setup-1.0.8.exe
+  # while the file was "SnapDL Setup 1.0.8.exe").
+  artifactName: ${productName}-Setup-${version}.${ext}
 publish:
   provider: github
   owner: mohamed5946

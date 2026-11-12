@@ -49,7 +49,7 @@ jobs:
         # and never need this ZIP.
         run: |
           $ver = (Get-Content windows/package.json | ConvertFrom-Json).version
-          Compress-Archive -Path "dist/SnapDL Setup $ver.exe" -DestinationPath "dist/SnapDL-Windows-v$ver.zip"
+          Compress-Archive -Path "dist/SnapDL-Setup-$ver.exe" -DestinationPath "dist/SnapDL-Windows-v$ver.zip"
 
       - name: List installer artifacts
         run: Get-ChildItem dist | Select-Object Name, Length
@@ -59,7 +59,7 @@ jobs:
         with:
           name: snapdl-windows-installer
           path: |
-            dist/SnapDL Setup *.exe
+            dist/SnapDL-Setup-*.exe
             dist/SnapDL-Windows-*.zip
             dist/latest.yml
             dist/*.blockmap

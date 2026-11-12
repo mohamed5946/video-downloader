@@ -20,10 +20,10 @@ npm run package-installer
 
 This produces in `../dist/`:
 
-- `SnapDL Setup 1.0.8.exe` — guided installer: install-directory
+- `SnapDL-Setup-1.0.8.exe` — guided installer: install-directory
   choice, Start menu entry, desktop shortcut, and an uninstall entry
   in Windows Settings / Control Panel.
-- `latest.yml` (+ `SnapDL Setup 1.0.8.exe.blockmap`) — published with
+- `latest.yml` (+ `SnapDL-Setup-1.0.8.exe.blockmap`) — published with
   the GitHub release so the installed app can update itself
   differentially through electron-updater (wired in `main.js`).
 
