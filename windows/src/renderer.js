@@ -238,6 +238,7 @@
     cancelSpeedTest: async () => ({ ok: true }),
     onSpeedTestSample: () => {},
     downloadUpdate: async () => ({ ok: true, path: 'C:\\Downloads\\SnapDL-update.zip', size: 260789130 }),
+    downloadAppUpdate: async () => ({ ok: true, path: '__updater__', size: 0 }),
     onUpdateDownloadProgress: () => {},
     installUpdate: async () => ({ ok: true }),
     setUpdateTonight: async () => ({ ok: true }),
@@ -798,7 +799,11 @@
     $('updProgressWrap').classList.remove('hidden');
     setUpdProgress(0, 0, null);
     try {
-      const dl = await api.downloadUpdate({ url: res.url, fileName: 'SnapDL-update.zip' });
+      // v1.0.8: installed app — differential update via electron-updater;
+      // otherwise the legacy file download.
+      const dl = res.viaUpdater && typeof api.downloadAppUpdate === 'function'
+        ? await api.downloadAppUpdate()
+        : await api.downloadUpdate({ url: res.url, fileName: 'SnapDL-update.zip' });
       if (!dl || !dl.ok) {
         toast(t('updates_download_failed') + (dl && dl.error ? ' ' + dl.error : ''));
         $('updProgressWrap').classList.add('hidden');
@@ -840,7 +845,10 @@
   });
   $('updInstallLaterBtn').addEventListener('click', async () => {
     try {
-      if (pendingUpdate && pendingUpdate.path) {
+      // v1.0.8: an electron-updater download is staged by the updater
+      // itself — there is no file path to remember; a later check
+      // re-downloads it differentially.
+      if (pendingUpdate && pendingUpdate.path && pendingUpdate.path !== '__updater__') {
         await api.setSetting('pendingUpdatePath', pendingUpdate.path);
         settings.pendingUpdatePath = pendingUpdate.path;
       }
@@ -876,18 +884,29 @@
   });
 
   // ================= speed test =================
-  // Circular gauge, 0–1000 Mbps on a log scale. The needle is drawn pointing
+  // Circular gauge, 0–1000 Mbps. The needle is drawn pointing
   // east (right) in the SVG, so rotate(-210deg) lands it at the lower-left
   // and rotate(30deg) at the lower-right — a 240° sweep through the top,
-  // like the Speedtest dial. Log fraction = ln(1+mbps) / ln(1001).
+  // like the Speedtest dial. v1.0.8: the marks 0, 5, 10, 50, 100, 200,
+  // 500, 750, 1000 sit at EQUAL arc spacing — piecewise-linear between
+  // adjacent marks, so mark i is at fraction i/8 and 100 sits at the
+  // exact middle / top-center (fraction 0.5).
   let speedUnit = 'Mbps';
   let speedRunning = false;
   let speedRunId = 0;
   let speedLastLiveMbps = 0;
   let speedHasResult = false;
 
+  const GAUGE_MARKS = [0, 5, 10, 50, 100, 200, 500, 750, 1000];
   function gaugeFraction(mbps) {
-    return Math.log(1 + Math.max(0, mbps || 0)) / Math.log(1001);
+    const v = Math.max(0, mbps || 0);
+    if (v <= 0) return 0;
+    if (v >= 1000) return 1;
+    for (let i = 0; i < GAUGE_MARKS.length - 1; i++) {
+      const lo = GAUGE_MARKS[i], hi = GAUGE_MARKS[i + 1];
+      if (v <= hi) return (i + (v - lo) / (hi - lo)) / (GAUGE_MARKS.length - 1);
+    }
+    return 1;
   }
   function gaugeAngle(mbps) {
     return -210 + gaugeFraction(mbps) * 240;

@@ -1,1 +1,24 @@
-{"author":"Mohamed El Sayed","description":"SnapDL — a beautiful video downloader for YouTube, TikTok, Instagram, Facebook and X.","devDependencies":{"electron":"^45.2.3","electron-packager":"^17.1.2"},"license":"MIT","main":"main.js","name":"snapdl","scripts":{"package-win":"electron-packager . SnapDL --platform=win32 --arch=x64 --out=../dist --overwrite --asar --prune=true --icon=icon.ico","start":"electron .","fetch-tools":"node scripts/fetch-ytdlp.js"},"version":"1.0.7"}
+{
+  "author": "Mohamed El Sayed",
+  "description": "SnapDL — a beautiful video downloader for YouTube, TikTok, Instagram, Facebook and X.",
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-packager": "^17.1.2",
+    "electron-builder": "^26.18.0"
+  },
+  "license": "MIT",
+  "main": "main.js",
+  "name": "snapdl",
+  "scripts": {
+    "package-win": "electron-packager . SnapDL --platform=win32 --arch=x64 --out=../dist --overwrite --asar --prune=true --icon=icon.ico",
+    "start": "electron .",
+    "fetch-tools": "node scripts/fetch-ytdlp.js",
+    "package-installer": "electron-builder --win nsis --publish never",
+    "dist": "electron-builder --win nsis --publish never",
+    "fetch-ffmpeg": "node scripts/fetch-ffmpeg.js"
+  },
+  "version": "1.0.8",
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
+}

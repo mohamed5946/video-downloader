@@ -522,11 +522,18 @@ html[data-theme="dark"] .glass-select option { background: #1b2328; color: #eef2
   transition: all .3s var(--ease);
 }
 .slider::before {
-  content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px;
+  content: ""; position: absolute; width: 22px; height: 22px; left: 3px; inset-inline-start: 3px; top: 3px;
   border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35);
   transition: transform .3s var(--ease);
 }
 .switch input:checked + .slider { background: linear-gradient(135deg, #4e7a8e, #3e6274); border-color: transparent; }
+/* v1.0.8 — knob travel fix: the knob is 22px in a 52px track, so it may
+   only move 22px from its 3px inset (3 → 25 → 47, inside the track).
+   The old RTL rule translated -22px from a physical left:3px start,
+   pushing the knob to x=-19 (outside the pill) and leaving OFF showing
+   the knob at the ON end. inset-inline-start puts the resting knob at
+   the inline-start end (right in RTL, left in LTR); the checked
+   translate then moves it to the opposite end, contained in both. */
 .switch input:checked + .slider::before { transform: translateX(22px); }
 [dir="ltr"] .switch input:checked + .slider::before { transform: translateX(22px); }
 [dir="rtl"] .switch input:checked + .slider::before { transform: translateX(-22px); }
@@ -590,13 +597,20 @@ html[data-theme="dark"] .glass-elevated {
   transform-box: view-box;
   transform-origin: 150px 150px;
 }
-.speed-needle line { stroke: url(#speedGrad); }
+/* v1.0.8 — the needle line uses a SOLID stroke, not the gradient:
+   a gradient stroke on a horizontal line never paints in Chromium —
+   the line's object bounding box has zero height, so the gradient
+   transform is singular and the stroke is discarded (the needle was
+   invisible since v1.0.7; only the hub circles painted). The hub keeps
+   the gradient fill; the line matches Android's solid #3E6274 needle. */
+.speed-needle line { stroke: #3e6274; }
 .speed-needle circle { fill: url(#speedGrad); }
 .speed-needle .needle-hub { fill: #fff; }
+/* v1.0.8 (Ookla-style): the speed number + phase sit BELOW the gauge
+   arc in normal flow, not absolutely positioned inside the circle. */
 .speed-center {
-  position: absolute; left: 0; right: 0; top: 63%;
-  transform: translateY(-50%);
   text-align: center; pointer-events: none;
+  margin-top: 4px;
 }
 .speed-value-row {
   font-size: 46px; font-weight: 900; line-height: 1;

@@ -160,56 +160,48 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                                   fraction: animatedFraction,
                                   isDark: AppColors.isDark(context),
                                 ),
-                                child: Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (s.running)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            gradient:
-                                                AppColors.accentGradient,
-                                            borderRadius:
-                                                BorderRadius.circular(99),
-                                          ),
-                                          child: Text(
-                                            settings.tr('speedtest_live'),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        SpeedTestService.formatSpeed(
-                                            gaugeMbps, settings.speedUnit),
-                                        style: TextStyle(
-                                          color: AppColors.textPrimaryOf(
-                                              context),
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 34,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _phaseLabel(s, settings),
-                                        style: TextStyle(
-                                          color: AppColors.textSecondaryOf(
-                                              context),
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                               ),
                             );
                           },
+                        ),
+                        // v1.0.8 (Ookla-style): the big speed number +
+                        // phase label sit BELOW the dial, not inside it.
+                        const SizedBox(height: 4),
+                        if (s.running)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.accentGradient,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              settings.tr('speedtest_live'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        if (s.running) const SizedBox(height: 6),
+                        Text(
+                          SpeedTestService.formatSpeed(
+                              gaugeMbps, settings.speedUnit),
+                          style: TextStyle(
+                            color: AppColors.textPrimaryOf(context),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 34,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _phaseLabel(s, settings),
+                          style: TextStyle(
+                            color: AppColors.textSecondaryOf(context),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
                         if (s.running) ...[
                           const SizedBox(height: 8),
@@ -476,9 +468,12 @@ class _ResultCard extends StatelessWidget {
 }
 
 /// Speedtest-style dial: 270° sweep (135° → 405°), tick marks at
-/// 0, 5, 10, 50, 100, 250, 500, 750, 1000 placed on the log scale,
-/// a progress arc in the progress-gradient colors, and a needle that
-/// rotates with [fraction].
+/// 0, 5, 10, 50, 100, 200, 500, 750, 1000 placed at EQUAL arc spacing
+/// (v1.0.8, Ookla-style — the marks sit at fraction i/8, so 100 is at
+/// the exact middle / top-center), a progress arc in the
+/// progress-gradient colors, and a needle that rotates with [fraction].
+/// The big speed number + phase label live BELOW the dial, not inside
+/// it (v1.0.8).
 class _GaugePainter extends CustomPainter {
   _GaugePainter({required this.fraction, required this.isDark});
 
@@ -486,7 +481,7 @@ class _GaugePainter extends CustomPainter {
   final bool isDark;
 
   static const List<double> _marks = [
-    0, 5, 10, 50, 100, 250, 500, 750, 1000
+    0, 5, 10, 50, 100, 200, 500, 750, 1000
   ];
   static const double _startAngle = 3 * pi / 4; // 135°
   static const double _sweep = 3 * pi / 2; // 270°
@@ -530,7 +525,8 @@ class _GaugePainter extends CustomPainter {
       );
     }
 
-    // Tick marks + labels on the log scale.
+    // Tick marks + labels at equal arc spacing (v1.0.8): each mark
+    // sits at fraction i/8 via the piecewise-linear gaugeFraction.
     final tickPaint = Paint()
       ..color = (isDark ? Colors.white : const Color(0xFF1E2A32))
           .withOpacity(0.35)
@@ -553,7 +549,12 @@ class _GaugePainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: label,
-          style: TextStyle(color: labelColor, fontSize: 10),
+          // v1.0.8: explicit Cairo — a CustomPainter's TextPainter does
+          // not inherit the theme's font, so without this the tick
+          // numbers fall back to the system font (and render as tofu
+          // boxes where no system font exists, e.g. widget tests).
+          style: TextStyle(
+              color: labelColor, fontSize: 10, fontFamily: 'Cairo'),
         ),
         textDirection: TextDirection.ltr,
       )..layout();

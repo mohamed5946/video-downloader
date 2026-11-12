@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const os = require('os');
 
 const APP_NAME = 'SnapDL';
-const APP_VERSION = '1.0.7';
+const APP_VERSION = '1.0.8';
 // Bundled download-tool version (yt-dlp.exe shipped / fetched by scripts/fetch-ytdlp.js).
 const BUNDLED_YTDLP_VERSION = '2026.10.26';
 const YTDLP_LATEST_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe';
@@ -21,6 +21,17 @@ const YTDLP_RELEASES_API_URL = 'https://api.github.com/repos/yt-dlp/yt-dlp/relea
 const YTDLP_SUMS_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS';
 const UPDATE_MANIFEST_URL = 'https://github.com/mohamed5946/video-downloader/releases/latest/download/update.json';
 const RELEASES_URL = 'https://github.com/mohamed5946/video-downloader/releases/latest';
+// v1.0.8 — installed-app updates via electron-updater (NSIS installer).
+// The installed app updates itself differentially from the GitHub
+// release (latest.yml + Setup exe blockmap); the update.json manifest
+// above stays as the fallback for portable / from-source runs. The
+// require is guarded so a missing module never breaks startup.
+let autoUpdater = null;
+try {
+  ({ autoUpdater } = require('electron-updater'));
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+} catch (_) { autoUpdater = null; }
 const PORTFOLIO_URL = 'https://mohamed5946.github.io/portfolio/';
 const PREVIEW_MODE = process.argv.includes('--preview');
 // Preview-only: the sandbox MITMs TLS, so YouTube's cert fails here.
@@ -166,6 +177,8 @@ function resolveBin(name) {
   const candidates = [
     path.join(exeDir(), name),
     path.join(process.resourcesPath, 'app', 'bin', name),
+    // v1.0.8: electron-builder extraResources land in resources/bin.
+    path.join(process.resourcesPath, 'bin', name),
     path.join(app.getAppPath(), 'bin', name),
     path.join(__dirname, 'bin', name),
     path.join(__dirname, '..', 'bin', name)
@@ -1094,8 +1107,10 @@ ipcMain.handle('redownload', (_e, id) => {
 
 ipcMain.handle('open-extension-folder', () => {
   const extDir = path.join(exeDir(), 'extension');
+  // v1.0.8: electron-builder extraResources land in resources/extension.
+  const resDir = path.join(process.resourcesPath, 'extension');
   const fallback = path.join(app.getAppPath(), 'extension');
-  const dir = fs.existsSync(extDir) ? extDir : fallback;
+  const dir = fs.existsSync(extDir) ? extDir : (fs.existsSync(resDir) ? resDir : fallback);
   if (!fs.existsSync(dir)) return { ok: false, error: ms('extMissing') };
   shell.openPath(dir);
   return { ok: true };
@@ -1122,8 +1137,36 @@ function compareVersions(a, b) {
   }
   return 0;
 }
+
+// v1.0.8: electron-updater release notes arrive as a string, an array of
+// { version, note } objects, or null — flatten to plain text for the
+// update card (strip any HTML tags).
+function flattenReleaseNotes(notes) {
+  if (!notes) return '';
+  const raw = Array.isArray(notes)
+    ? notes.map(n => (n && n.note) || '').join('\n')
+    : String(notes);
+  return raw.replace(/<[^>]*>/g, '').trim();
+}
 ipcMain.handle('check-updates', async () => {
   log('UPDATE', 'Checking for updates…');
+  // v1.0.8: installed app — ask electron-updater first (differential
+  // updates from latest.yml on the GitHub release). Any failure falls
+  // through to the update.json manifest check below.
+  if (app.isPackaged && autoUpdater) {
+    try {
+      const info = await autoUpdater.checkForUpdates();
+      if (info && info.updateInfo && compareVersions(info.updateInfo.version, APP_VERSION) > 0) {
+        const notes = flattenReleaseNotes(info.updateInfo.releaseNotes);
+        log('UPDATE', `New version available: ${info.updateInfo.version} (current ${APP_VERSION}).`);
+        return { ok: true, update: true, version: info.updateInfo.version, notes, url: RELEASES_URL, viaUpdater: true };
+      }
+      log('UPDATE', `You are on the latest version (${APP_VERSION}).`);
+      return { ok: true, update: false, version: APP_VERSION };
+    } catch (e) {
+      log('UPDATE', 'Updater check failed, falling back to manifest: ' + e.message, 'error');
+    }
+  }
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
@@ -1158,8 +1201,46 @@ ipcMain.handle('speed-test-cancel', () => {
   return { ok: false, error: 'No speed test is running.' };
 });
 ipcMain.handle('download-update', (_e, opts) => downloadUpdateFile(opts && opts.url, opts && opts.fileName));
+
+// v1.0.8 — differential in-app update via electron-updater (installed
+// app only). Progress is forwarded on the same 'update-download-progress'
+// channel the update card already listens to; completion resolves with a
+// marker path so 'install-update' knows to quitAndInstall instead of
+// opening a downloaded file.
+let updaterDownloadTotal = 0;
+if (autoUpdater) {
+  autoUpdater.on('download-progress', (p) => {
+    updaterDownloadTotal = p.total || updaterDownloadTotal;
+    const speedBps = p.bytesPerSecond || 0;
+    if (win && !win.isDestroyed()) win.webContents.send('update-download-progress', {
+      received: p.transferred || 0,
+      total: p.total || 0,
+      percent: p.percent || 0,
+      speedBps,
+      etaSeconds: (p.total && speedBps > 0) ? Math.round((p.total - (p.transferred || 0)) / speedBps) : 0
+    });
+  });
+}
+ipcMain.handle('download-app-update', async () => {
+  if (!autoUpdater || !app.isPackaged) return { ok: false, error: ms('updateUnreachable') };
+  try {
+    updaterDownloadTotal = 0;
+    await autoUpdater.downloadUpdate();
+    log('UPDATE', 'Update downloaded, ready to install.');
+    return { ok: true, path: '__updater__', size: updaterDownloadTotal };
+  } catch (e) {
+    log('UPDATE', 'Update download failed: ' + e.message, 'error');
+    return { ok: false, error: scrubEngineWords(e.message || 'Download failed') || 'Download failed.' };
+  }
+});
 ipcMain.handle('install-update', async (_e, opts) => {
   const target = (opts && opts.path) || loadSettings().pendingUpdatePath || '';
+  // v1.0.8: electron-updater download — install it and restart the app.
+  if (target === '__updater__') {
+    if (!autoUpdater) return { ok: false, error: 'No downloaded update found.' };
+    autoUpdater.quitAndInstall(false, true);
+    return { ok: true };
+  }
   if (!target) return { ok: false, error: 'No downloaded update found.' };
   const err = await shell.openPath(target); // opens the zip / installer
   if (err) return { ok: false, error: err };
@@ -1298,7 +1379,13 @@ async function runPreviewCaptures() {
     { file: '03-settings.png', view: 'settings', width: 1180, height: 780 },
     { file: '04-about.png', view: 'settings', sub: 'about', width: 1180, height: 900 },
     { file: '05-youtube.png', view: 'youtube', width: 1180, height: 780, wait: 8000 },
-    { file: '07-main-mobile-width.png', view: 'download', width: 390, height: 1500 }
+    { file: '07-main-mobile-width.png', view: 'download', width: 390, height: 1500 },
+    // v1.0.8: the redesigned speed gauge (number below the arc, equal
+    // tick spacing) staged at 47.6 Mbps, and the ad-blocker toggle in
+    // both states (RTL, Arabic default — the overflow bug case).
+    { file: '08-speed-test.png', view: 'speed', width: 1180, height: 1280, speed: 47.6 },
+    { file: '09-adblock-off.png', view: 'settings', sub: 'adblock', width: 1180, height: 780, adblock: false },
+    { file: '10-adblock-on.png', view: 'settings', sub: 'adblock', width: 1180, height: 780, adblock: true }
   ];
   for (const s of shots) {
     if (s.width < 940 || s.height < 620) win.setMinimumSize(300, 300); // allow the narrow mobile-width shot
@@ -1307,7 +1394,35 @@ async function runPreviewCaptures() {
     win.webContents.send('preview-state', PREVIEW_STATE); // re-apply (init may still overwrite)
     if (s.sub) win.webContents.send('preview-show-sub', s.sub);
     await sleep(s.wait || 900);
-    if (s.file === '01-main-download.png' || s.file === '07-main-mobile-width.png' || s.file === '04-about.png') {
+    if (s.speed != null) {
+      // Stage the gauge at a fixed reading using the same
+      // piecewise-linear marks as renderer.js (0, 5, 10, 50, 100, 200,
+      // 500, 750, 1000) — needle angle, progress arc, number and cards.
+      await win.webContents.executeJavaScript(`(() => {
+        const marks = [0, 5, 10, 50, 100, 200, 500, 750, 1000];
+        const v = ${s.speed};
+        let f = 0;
+        if (v >= 1000) f = 1;
+        else for (let i = 0; i < marks.length - 1; i++) {
+          if (v <= marks[i + 1]) { f = (i + (v - marks[i]) / (marks[i + 1] - marks[i])) / (marks.length - 1); break; }
+        }
+        const needle = document.getElementById('speedNeedle');
+        if (needle) needle.style.transform = 'rotate(' + (-210 + f * 240) + 'deg)';
+        const arc = document.getElementById('speedArc');
+        if (arc) arc.style.strokeDashoffset = String(100 - f * 100);
+        const val = document.getElementById('speedValue');
+        if (val) val.textContent = '${s.speed}';
+        const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+        set('speedDownload', '47.6'); set('speedUpload', '12.4');
+        set('speedPing', '24'); set('speedJitter', '3');
+      })()`).catch(() => {});
+      await sleep(500);
+    }
+    if (s.adblock != null) {
+      await win.webContents.executeJavaScript(`(() => { const t = document.getElementById('adblockToggle'); if (t) t.checked = ${s.adblock}; })()`).catch(() => {});
+      await sleep(500);
+    }
+    if (s.file === '01-main-download.png' || s.file === '07-main-mobile-width.png' || s.file === '04-about.png' || s.file === '08-speed-test.png') {
       // Show the view from the top (link input + job card all in frame).
       await win.webContents.executeJavaScript(`var m=document.querySelector('.main'); if(m) m.scrollTop=0; window.scrollTo(0,0);`).catch(() => {});
       await sleep(500);

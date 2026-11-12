@@ -1,0 +1,39 @@
+# v1.0.8 — electron-builder config: NSIS installer for Windows.
+# Produces "SnapDL Setup <version>.exe" (guided installer: install
+# directory choice, Start menu entry, desktop shortcut, uninstall entry)
+# plus latest.yml + .blockmap for differential electron-updater updates.
+# Publish provider is GitHub so the updater can fetch latest.yml from
+# the release; CI uploads the artifacts with the gh CLI instead of
+# letting electron-builder publish (--publish never).
+appId: com.valor.snapdl
+productName: SnapDL
+directories:
+  output: ../dist
+files:
+  - main.js
+  - preload.js
+  - src/**/*
+  - package.json
+  - icon.ico
+  - icon.png
+extraResources:
+  - from: bin
+    to: bin
+  - from: extension
+    to: extension
+asar: true
+win:
+  target: nsis
+  icon: icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SnapDL
+  uninstallDisplayName: SnapDL
+  artifactName: ${productName} Setup ${version}.${ext}
+publish:
+  provider: github
+  owner: mohamed5946
+  repo: video-downloader

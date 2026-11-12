@@ -1,0 +1,53 @@
+name: Build Windows installer
+
+# v1.0.8: builds the NSIS Setup installer on a real Windows runner
+# (electron-builder cannot build a Windows installer on Linux).
+# Produces "SnapDL Setup <version>.exe" + latest.yml + .blockmap for
+# differential electron-updater updates.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/build-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: windows/package-lock.json
+
+      - name: Install dependencies
+        run: cd windows && npm ci
+
+      - name: Fetch download-tool binary (checksum-verified)
+        run: cd windows && npm run fetch-tools
+
+      - name: Fetch ffmpeg binaries
+        run: cd windows && npm run fetch-ffmpeg
+
+      - name: Build NSIS installer
+        run: cd windows && npm run package-installer
+
+      - name: List installer artifacts
+        run: Get-ChildItem dist | Select-Object Name, Length
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapdl-windows-installer
+          path: |
+            dist/SnapDL Setup *.exe
+            dist/latest.yml
+            dist/*.blockmap
+          if-no-files-found: error

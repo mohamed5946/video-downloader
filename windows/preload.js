@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('snapdlAPI', {
     if (url && typeof url === 'object') return ipcRenderer.invoke('download-update', url);
     return ipcRenderer.invoke('download-update', { url, fileName });
   },
+  // v1.0.8: differential update via electron-updater (installed app).
+  downloadAppUpdate: () => ipcRenderer.invoke('download-app-update'),
   onUpdateDownloadProgress: (cb) => ipcRenderer.on('update-download-progress', (_e, progress) => cb(progress)),
   installUpdate: (p) => {
     if (p && typeof p === 'object') return ipcRenderer.invoke('install-update', p);

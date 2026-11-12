@@ -11,6 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:snapdl/main.dart';
+import 'package:snapdl/screens/speed_test_screen.dart';
+import 'package:snapdl/services/speed_test_service.dart';
 
 /// Locate the MaterialIcons font in the Flutter SDK. The SDK lives at a
 /// different path on every machine (and on CI), so resolve it from the
@@ -177,6 +179,28 @@ void main() {
     await expectLater(
       find.byType(SnapDLApp),
       matchesGoldenFile('goldens/snapdl-preview-watch.png'),
+    );
+  });
+
+  testWidgets('preview: speed test gauge (v1.0.8, finished 47.6 Mbps)',
+      (tester) async {
+    await pumpPreview(tester, 'settings');
+    // Seed a finished test so the gauge rests on a real reading:
+    // needle between the 10 and 50 marks, number below the dial.
+    final service = SpeedTestService.instance;
+    service.phase = SpeedTestPhase.done;
+    service.downloadMbps = 47.6;
+    service.uploadMbps = 12.4;
+    service.pingMs = 24;
+    service.jitterMs = 3;
+    addTearDown(() => SpeedTestService.instance.reset());
+    await tester.ensureVisible(find.text('سرعة الإنترنت'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('سرعة الإنترنت'));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(SpeedTestScreen),
+      matchesGoldenFile('goldens/snapdl-preview-speed.png'),
     );
   });
 }

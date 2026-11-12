@@ -92,12 +92,25 @@ class SpeedTestService extends ChangeNotifier {
   }
 
   /// Map 0–1000 Mbps to 0.0–1.0 on the gauge dial. The dial marks are
-  /// 0, 5, 10, 50, 100, 250, 500, 750, 1000 — a log scale keeps the
-  /// low end readable: fraction = ln(1 + mbps) / ln(1001).
+  /// 0, 5, 10, 50, 100, 200, 500, 750, 1000, placed at EQUAL arc
+  /// spacing (v1.0.8, Ookla-style): piecewise-linear between adjacent
+  /// marks, so mark i sits at fraction i/8 and 100 sits at the exact
+  /// middle / top-center of the dial (fraction 0.5).
+  static const List<double> gaugeMarks = [
+    0, 5, 10, 50, 100, 200, 500, 750, 1000
+  ];
+
   static double gaugeFraction(double mbps) {
     if (mbps <= 0) return 0;
     if (mbps >= 1000) return 1;
-    return (log(1 + mbps) / log(1001)).clamp(0.0, 1.0);
+    for (var i = 0; i < gaugeMarks.length - 1; i++) {
+      final lo = gaugeMarks[i];
+      final hi = gaugeMarks[i + 1];
+      if (mbps <= hi) {
+        return (i + (mbps - lo) / (hi - lo)) / (gaugeMarks.length - 1);
+      }
+    }
+    return 1;
   }
 
   /// Jitter: mean absolute difference between successive ping samples.

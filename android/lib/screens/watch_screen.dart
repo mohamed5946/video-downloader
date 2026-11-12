@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -23,10 +25,84 @@ class WatchScreen extends StatefulWidget {
   State<WatchScreen> createState() => _WatchScreenState();
 }
 
+/// Is [url] a YouTube video page — i.e. should the floating download
+/// button be shown for it?
+///
+/// v1.0.8: the old check was a plain `contains('watch?v=')` on a URL
+/// that was only refreshed in onPageFinished. m.youtube.com is an SPA,
+/// so tapping a video navigates with history.pushState and never fires
+/// onPageFinished — the button never appeared even while a video
+/// played. This check also covers Shorts, live streams and youtu.be
+/// links, and parses the URL instead of substring-matching so a search
+/// or channel page can never count as a video.
+bool isVideoPageUrl(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return false;
+  final host = uri.host.toLowerCase();
+  const youTubeHosts = {
+    'm.youtube.com',
+    'www.youtube.com',
+    'youtube.com',
+    'youtu.be',
+  };
+  if (!youTubeHosts.contains(host)) return false;
+  if (host == 'youtu.be') return uri.pathSegments.isNotEmpty;
+  if (uri.path == '/watch' && uri.queryParameters.containsKey('v')) {
+    return true;
+  }
+  if (uri.pathSegments.isNotEmpty &&
+      (uri.pathSegments.first == 'shorts' ||
+          uri.pathSegments.first == 'live')) {
+    return uri.pathSegments.length > 1;
+  }
+  return false;
+}
+
 class _WatchScreenState extends State<WatchScreen> {
   WebViewController? _webController;
   String _currentUrl = 'https://m.youtube.com';
   bool _signInNoteShown = false;
+  // v1.0.8: backstop poll of the WebView's live URL (see _pollLiveUrl).
+  Timer? _urlPollTimer;
+  bool _polling = false;
+
+  /// Record a new current URL (from any of the three trackers below).
+  /// No setState when nothing changed, so the poll doesn't rebuild
+  /// the page every second.
+  void _updateCurrentUrl(String? url) {
+    if (url == null || url.isEmpty || url == _currentUrl) return;
+    if (!mounted) return;
+    setState(() => _currentUrl = url);
+  }
+
+  /// Backstop for SPA navigations: ask the page itself where it is.
+  /// onUrlChange normally catches pushState navigations, but if the
+  /// platform ever misses one, this poll still activates the button
+  /// within a second of the video opening.
+  Future<void> _pollLiveUrl() async {
+    final controller = _webController;
+    if (controller == null || _polling || !mounted) return;
+    _polling = true;
+    try {
+      final raw = await controller
+          .runJavaScriptReturningResult('window.location.href');
+      // Android returns the string JSON-encoded (with quotes).
+      final href = raw
+          .toString()
+          .replaceAll(RegExp('^["\']|["\']\$'), '');
+      _updateCurrentUrl(href);
+    } catch (_) {
+      // The page may be mid-navigation — the next tick retries.
+    } finally {
+      _polling = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _urlPollTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -39,9 +115,12 @@ class _WatchScreenState extends State<WatchScreen> {
       ..setBackgroundColor(const Color(0xFF0A0F1E))
       ..setNavigationDelegate(
         NavigationDelegate(
+          // v1.0.8: fires on SPA (pushState) navigations too — this is
+          // what actually tracks a video opening on m.youtube.com.
+          onUrlChange: (change) => _updateCurrentUrl(change.url),
           onPageFinished: (url) {
             if (!mounted) return;
-            setState(() => _currentUrl = url);
+            _updateCurrentUrl(url);
             if (url.contains('accounts.google.com') && !_signInNoteShown) {
               _signInNoteShown = true;
               final settings = SettingsService.instance;
@@ -67,9 +146,13 @@ class _WatchScreenState extends State<WatchScreen> {
         ),
       )
       ..loadRequest(Uri.parse('https://m.youtube.com'));
+    // v1.0.8: poll the live URL once a second while the page is open —
+    // the backstop if onUrlChange ever misses an SPA navigation.
+    _urlPollTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _pollLiveUrl());
   }
 
-  bool get _isVideoPage => _currentUrl.contains('watch?v=');
+  bool get _isVideoPage => isVideoPageUrl(_currentUrl);
 
   @override
   Widget build(BuildContext context) {
