@@ -1078,9 +1078,80 @@ ipcMain.handle('resume-download', (_e, jobId) => resumeJob(jobId));
 ipcMain.handle('cancel-download', (_e, jobId) => cancelJob(jobId));
 
 ipcMain.handle('get-history', () => history);
+// v1.0.8 — resolve the real file for an Open request.
+//
+// A history entry's stored path can be stale even though the file is
+// fine in the download folder: the finishing job records the last
+// "[download] Destination:" line, which for a merged video+audio
+// download is the intermediate part file (e.g. "Title [id].f140.m4a")
+// that the merge deletes — the merged "Title [id].mp4" is what lands
+// in Downloads\SnapDL. The path can also go stale when the download
+// folder is changed in Settings after the download. So Open verifies
+// candidates in order and opens the first one that exists on disk;
+// the stored path itself is never rewritten — resolution happens at
+// open time only.
+function resolveOpenPath(filePath) {
+  const tried = [];
+  const isFile = (p) => {
+    try { return !!p && fs.statSync(p).isFile(); } catch (_) { return false; }
+  };
+  // 1. The recorded path, exactly as stored.
+  if (filePath) {
+    tried.push(filePath);
+    if (isFile(filePath)) return { path: filePath, tried };
+  } else {
+    return { path: null, tried };
+  }
+  const base = path.basename(filePath);
+  const dirs = [];
+  const pushDir = (d) => { if (d && !dirs.includes(d)) dirs.push(d); };
+  pushDir(getDownloadDir());
+  pushDir(path.dirname(filePath));
+  // 2. Same filename in the current download folder (the folder was
+  //    moved in Settings after the download) or its original folder.
+  for (const d of dirs) {
+    const inDir = path.join(d, base);
+    if (inDir === filePath) continue;
+    tried.push(inDir);
+    if (isFile(inDir)) return { path: inDir, tried };
+  }
+  // 3. The merged file: strip the intermediate format suffix
+  //    ("Title [id].f140.m4a" -> stem "Title [id]") and look for a
+  //    finished file with that stem in the download folder(s).
+  const stem = base.replace(/\.f\d+\.[^.]+$/, '').replace(/\.[^.]+$/, '');
+  if (stem && stem !== base) {
+    for (const d of dirs) {
+      let cands = [];
+      try {
+        cands = fs.readdirSync(d)
+          .filter((f) => f.startsWith(stem + '.') && !f.endsWith('.part') && !f.endsWith('.part-Frag'))
+          .map((f) => path.join(d, f))
+          .filter((p) => isFile(p));
+      } catch (_) { /* folder unreadable — try the next one */ }
+      // Prefer a video file, then the newest candidate.
+      const videoExts = ['.mp4', '.mkv', '.webm', '.mov'];
+      cands.sort((a, b) => {
+        const av = videoExts.includes(path.extname(a).toLowerCase()) ? 0 : 1;
+        const bv = videoExts.includes(path.extname(b).toLowerCase()) ? 0 : 1;
+        if (av !== bv) return av - bv;
+        try { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs; } catch (_) { return 0; }
+      });
+      for (const c of cands) tried.push(c);
+      if (cands.length > 0) return { path: cands[0], tried };
+    }
+  }
+  return { path: null, tried };
+}
 ipcMain.handle('open-file', (_e, filePath) => {
-  if (!filePath || !fs.existsSync(filePath)) return { ok: false, error: ms('fileGone') };
-  shell.openPath(filePath);
+  const { path: realPath, tried } = resolveOpenPath(filePath);
+  if (!realPath) {
+    log('HISTORY', 'Open failed — file not found. Tried: ' + tried.join(' | '), 'error');
+    return { ok: false, error: ms('fileGone') + ' — ' + (filePath || '') };
+  }
+  if (realPath !== filePath) {
+    log('HISTORY', `Open resolved a stale path to the real file: ${realPath}`);
+  }
+  shell.openPath(realPath);
   return { ok: true };
 });
 ipcMain.handle('open-folder', (_e, filePath) => {
